@@ -20,9 +20,9 @@ Arquitectura actual:
 
 - el frontend de paciente sigue usando enlaces `wa.me` para WhatsApp
 - el Worker guarda archivos e imagenes en Cloudflare R2 y los expone por `/files/...`
-- los PDF de diagnostico se generan en el frontend y luego se almacenan en R2
+- los PDF de diagnostico se generan en frontend (plantilla HTML/base64) y luego se almacenan en R2
 - el PDF de evolucion del paciente sigue generandose en el navegador para descarga directa
-- los correos automaticos de citas siguen siendo una responsabilidad pendiente fuera del Worker
+- los correos automaticos de citas se envian mediante bridge hacia Apps Script
 
 Punto importante:
 
@@ -37,11 +37,14 @@ Variables requeridas:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SESSION_TTL_SECONDS`
 - `CORS_ALLOWED_ORIGINS`
+- `WORKER_BRIDGE_TOKEN` (si quieres mantener correos de citas via bridge con Apps Script)
+- `WORKER_BRIDGE_TOKENS` (opcional, lista separada por coma/espacio para probar varios tokens durante migracion)
 
 Variable opcional heredada:
 
 - `APPS_SCRIPT_API_URL`
   Solo para fallback temporal de acciones no migradas.
+  Tambien se usa para el bridge de correos de citas mientras migras email al Worker.
 
 ## Desarrollo local
 
@@ -121,3 +124,14 @@ Ejemplo `me`:
 Hay una guia de cierre con hallazgos concretos en:
 
 - [cloudflare-worker/MIGRACION_CIERRE.md](./MIGRACION_CIERRE.md)
+
+## Bridge de correos (importante)
+
+Para que salgan correos de confirmacion/reagenda, el token debe coincidir en ambos lados:
+
+1. Worker (`.dev.vars`):
+   - `WORKER_BRIDGE_TOKEN=...` o `WORKER_BRIDGE_TOKENS=token1,token2`
+2. Apps Script (Script Properties):
+   - `VIDAFEM_WORKER_BRIDGE_TOKEN=...` o `WORKER_BRIDGE_TOKEN=...`
+
+Si no coincide, la cita se guarda igual pero el Worker devolvera advertencia de bridge token rechazado.

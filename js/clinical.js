@@ -33,7 +33,8 @@ function getSessionDataSafe() {
 function requireDoctorSession() {
     const s = getSessionDataSafe();
     const role = s && s.role ? String(s.role).toLowerCase() : "";
-    if (!s || (role !== "admin" && role !== "doctor")) {
+    const token = s ? String(s.session_token || "").trim() : "";
+    if (!s || !token || (role !== "admin" && role !== "doctor")) {
         alert("Sesión inválida o expirada. Inicia sesión nuevamente.");
         try { sessionStorage.removeItem("vidafem_session"); } catch (e) {}
         window.navigateWithEnv("index.html");
@@ -60,6 +61,11 @@ function postClinicalApiJson_(payload) {
     if (!body.session_token && typeof window.getSessionToken === "function") {
         const token = String(window.getSessionToken() || "").trim();
         if (token) body.session_token = token;
+    }
+    if (!body.session_token) {
+        const session = getSessionDataSafe();
+        const fallbackToken = session ? String(session.session_token || "").trim() : "";
+        if (fallbackToken) body.session_token = fallbackToken;
     }
 
     return fetch(buildClinicalApiUrl_(), {
@@ -1070,6 +1076,11 @@ function setupAppointmentListeners() {
                 if (res.success) {
                     window.closeModal('modalAppointment');
                     this.reset();
+                    if (res.warning && window.showToast) {
+                        window.showToast(String(res.warning), "warning");
+                    } else if (res.warning) {
+                        alert("Advertencia: " + res.warning);
+                    }
                     
                     const nombrePac = res.nombre || "Paciente";
                     const telPac = res.telefono || "";
@@ -1302,6 +1313,11 @@ if(formResch) {
                 window.closeModal('modalReschedule');
                 loadAppointmentHistory(currentPatientId);
                 openDoctorRescheduleSuccessModal_();
+                if (res.warning && window.showToast) {
+                    window.showToast(String(res.warning), "warning");
+                } else if (res.warning) {
+                    alert("Advertencia: " + res.warning);
+                }
             } else {
                 alert("Error: " + res.message);
             }

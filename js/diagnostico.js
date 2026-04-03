@@ -29,6 +29,8 @@ let history = [];
 let editingTextIndex = null;
 let isDiagnosisSaveInProgress = false;
 let isManagingDiagnosisAssets = false;
+const DIAGNOSIS_HTML_TEMPLATE_PATH = "plantilla_vidafem.html";
+let diagnosisHtmlTemplateCache_ = "";
 
 function getSessionDataSafe() {
   try {
@@ -67,7 +69,18 @@ function postDiagnosisApiJson_(payload) {
   return fetch(API_URL, {
     method: "POST",
     body: JSON.stringify(body)
-  }).then((r) => r.json());
+  }).then(async (r) => {
+    const raw = await r.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (e) {}
+    if (parsed && typeof parsed === "object") return parsed;
+    return {
+      success: false,
+      message: "HTTP " + r.status + " - " + (String(raw || "").trim() || "Respuesta invalida del servidor.")
+    };
+  });
 }
 
 const GENERATED_DIAGNOSIS_DOC_META = {
@@ -362,10 +375,35 @@ function getDiagnosisDoctorDisplayName_() {
   return String(data.nombre_doctor || data.nombre || data.usuario || "").trim();
 }
 
+function getDiagnosisDoctorMeta_() {
+  const session = getSessionDataSafe();
+  const data = session && session.data ? session.data : {};
+  const roleRaw = String(data.rol || data.ocupacion || "DOCTOR").trim().toUpperCase();
+  return {
+    name: String(data.nombre_doctor || data.nombre || data.usuario || "").trim(),
+    role: roleRaw || "DOCTOR",
+    register: String(data.registro_sanitario || "").trim()
+  };
+}
+
 function getDiagnosisPatientCode_() {
   const codeEl = document.getElementById("clinId");
   const code = codeEl ? String(codeEl.innerText || codeEl.textContent || "").trim() : "";
   return code || ("ID: " + String(currentPatientId || "--"));
+}
+
+function getDiagnosisPatientCedulaForPdf_() {
+  const cedulaEl = document.getElementById("displayCedula");
+  const raw = cedulaEl ? String(cedulaEl.innerText || cedulaEl.textContent || "").trim() : "";
+  if (!raw) return "--";
+  const match = raw.match(/:\s*(.+)$/);
+  return String(match && match[1] ? match[1] : raw).trim() || "--";
+}
+
+function getDiagnosisPatientAgeForPdf_() {
+  const ageEl = document.getElementById("displayEdad");
+  const raw = ageEl ? String(ageEl.innerText || ageEl.textContent || "").trim() : "";
+  return raw || "--";
 }
 
 function getDiagnosisServiceMeta_(serviceName) {
@@ -385,6 +423,383 @@ function getDiagnosisReportTitle_(serviceName) {
   if (custom) return custom.toUpperCase();
   if (service) return service.toUpperCase();
   return "REPORTE CLINICO";
+}
+
+function diagnosisValueToHtmlLines_(value) {
+  const safe = escapeHtmlDiagnosis_(diagnosisPdfValueToText_(value));
+  if (!safe) return "";
+  return safe.replace(/\n/g, "<br>");
+}
+
+function formatDiagnosisGeneratedAtText_(dateValue) {
+  const date = dateValue instanceof Date ? dateValue : new Date();
+  try {
+    return date.toLocaleString("es-EC");
+  } catch (e) {
+    return date.toISOString();
+  }
+}
+
+function buildDiagnosisTemplateFieldsHtml_(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (!list.length) {
+    return "<div style=\"font-size:10pt;color:#666;\">Sin campos clinicos para mostrar.</div>";
+  }
+  return list.map((entry) => {
+    const label = escapeHtmlDiagnosis_(String((entry && entry.label) || "").trim());
+    const value = diagnosisValueToHtmlLines_(entry && entry.value);
+    if (!label || !value) return "";
+    return ""
+      + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
+      + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">" + label + "</div>"
+      + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + value + "</div>"
+      + "</section>";
+  }).filter(Boolean).join("");
+}
+
+function buildDiagnosisTemplateImagesHtml_(images) {
+  const list = Array.isArray(images) ? images : [];
+  if (!list.length) return "";
+  const blocks = list.map((item, index) => {
+    const title = escapeHtmlDiagnosis_(String((item && item.title) || ("Imagen " + (index + 1))).trim());
+    const src = escapeHtmlDiagnosis_(String((item && item.dataUrl) || "").trim());
+    const size = String((item && item.size) || "").trim().toLowerCase();
+    if (!src) return "";
+    const frameStyle = size === "large"
+      ? "width:100%;height:112mm;"
+      : size === "medium"
+        ? "width:48%;height:80mm;"
+        : "width:31%;height:53mm;";
+    return ""
+      + "<figure style=\"margin:0 0 4mm 0; page-break-inside:avoid; " + frameStyle + " display:inline-flex; flex-direction:column;\">"
+      + "<figcaption style=\"font-size:9pt;font-weight:700;color:#36235d;margin:0 0 1.5mm 0;\">" + title + "</figcaption>"
+      + "<img src=\"" + src + "\" alt=\"" + title + "\" style=\"width:100%;height:100%;display:block;border:1px solid #ddd;border-radius:2mm;object-fit:contain;background:#fff;\">"
+      + "</figure>";
+  }).filter(Boolean).join("");
+  if (!blocks) return "";
+  return ""
+    + "<section style=\"margin-top:2mm;\">"
+    + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin:0 0 2mm 0;\">Imagenes clinicas</div>"
+    + "<div style=\"display:flex;flex-wrap:wrap;gap:2.4mm;align-items:flex-start;\">"
+    + blocks
+    + "</div>"
+    + "</section>";
+}
+
+function buildDiagnosisTemplatePatientHeaderHtml_(payload, generatedAtText) {
+  const data = payload || {};
+  const patientName = String(
+    data.nombre_paciente
+    || ((document.getElementById("patientNameDisplay") || {}).value)
+    || "PACIENTE"
+  ).trim();
+  const ageText = getDiagnosisPatientAgeForPdf_();
+  const cedula = getDiagnosisPatientCedulaForPdf_();
+  return ""
+    + "<table style=\"width:100%;border-collapse:collapse;margin:0 0 4mm 0;font-size:10pt;color:#1f2937;\">"
+    + "<tr>"
+    + "<td style=\"padding:0 0 1.2mm 0;font-weight:700;\">PACIENTE: " + escapeHtmlDiagnosis_(patientName) + "</td>"
+    + "<td style=\"padding:0 0 1.2mm 0;font-weight:700;text-align:right;\">EDAD: " + escapeHtmlDiagnosis_(ageText) + "</td>"
+    + "</tr>"
+    + "<tr>"
+    + "<td style=\"padding:0;font-weight:700;\">C.I.: " + escapeHtmlDiagnosis_(cedula) + "</td>"
+    + "<td style=\"padding:0;font-weight:700;text-align:right;\">FECHA: " + escapeHtmlDiagnosis_(generatedAtText) + "</td>"
+    + "</tr>"
+    + "</table>";
+}
+
+function formatDiagnosisDoctorRoleForSignature_(value) {
+  const raw = String(value || "DOCTOR").trim().toUpperCase();
+  if (!raw) return "DOCTOR";
+  if (raw.length > 22 && raw.indexOf(" Y ") > -1) return raw.replace(" Y ", "<br>Y ");
+  if (raw.length > 24 && raw.indexOf(" / ") > -1) return raw.replace(" / ", "<br>");
+  return raw;
+}
+
+function getDiagnosisSignatureLogoSrc_() {
+  const fromHeader = document.querySelector(".logo-icon");
+  if (fromHeader && String(fromHeader.src || "").trim()) {
+    return String(fromHeader.src || "").trim();
+  }
+  const candidates = [
+    "assets/logo2.png",
+    "./assets/logo2.png",
+    "../assets/logo2.png",
+    "/assets/logo2.png"
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      return new URL(candidates[i], window.location.href).toString();
+    } catch (e) {}
+  }
+  return "";
+}
+
+function buildDiagnosisTemplateSignatureHtml_(payload) {
+  const data = payload || {};
+  const includeSignature = !!data.incluir_firma_virtual;
+  if (!includeSignature) return "";
+
+  const meta = getDiagnosisDoctorMeta_();
+  const doctorName = String(meta.name || "").trim();
+  if (!doctorName) return "";
+  const roleLine = formatDiagnosisDoctorRoleForSignature_(meta.role);
+  const registerLine = String(meta.register || "").trim();
+  const logoSrc = getDiagnosisSignatureLogoSrc_();
+
+  return ""
+    + "<section style=\"margin-top:39mm; page-break-inside:avoid; text-align:center;\">"
+    + "<div style=\"display:inline-block; min-width:95mm; padding-top:2mm; border-top:1px solid #b9b9b9;\">"
+    + "<div style=\"font-size:12pt; font-style:italic; font-weight:700; color:#2f2541; line-height:1.2;\">"
+    + escapeHtmlDiagnosis_(doctorName)
+    + "</div>"
+    + "<div style=\"display:inline-flex; align-items:center; justify-content:center; gap:3.2mm; margin-top:1.3mm;\">"
+    + (logoSrc
+      ? "<img src=\"" + escapeHtmlDiagnosis_(logoSrc) + "\" alt=\"Logo institucional\" style=\"height:12.5mm; width:auto; object-fit:contain;\" onerror=\"this.style.display='none';\"/>"
+      : "")
+    + "<div style=\"text-align:left;\">"
+    + "<div style=\"font-size:9pt; font-weight:700; color:#4a386d; line-height:1.25;\">"
+    + roleLine
+    + "</div>"
+    + (registerLine
+      ? "<div style=\"font-size:8.3pt; font-style:italic; color:#5a5a5a; margin-top:0.7mm;\">Reg. San. "
+        + escapeHtmlDiagnosis_(registerLine)
+        + "</div>"
+      : "")
+    + "</div>"
+    + "</div>"
+    + "</div>"
+    + "</section>";
+}
+
+function buildDiagnosisTemplateMainHtml_(payload, fieldEntries, resolvedImages) {
+  const data = payload || {};
+  const serviceName = String(data.tipo_examen || "").trim();
+  const reportTitle = getDiagnosisReportTitle_(serviceName);
+  const generatedAt = formatDiagnosisGeneratedAtText_(new Date()).split(",")[0] || formatDiagnosisGeneratedAtText_(new Date());
+  const headerHtml = buildDiagnosisTemplatePatientHeaderHtml_(data, generatedAt);
+  const fieldsHtml = buildDiagnosisTemplateFieldsHtml_(fieldEntries);
+  const imagesHtml = buildDiagnosisTemplateImagesHtml_(resolvedImages);
+  const signatureHtml = buildDiagnosisTemplateSignatureHtml_(data);
+
+  return ""
+    + "<article style=\"font-family:Arial,sans-serif;color:#222;\">"
+    + headerHtml
+    + "<h1 style=\"font-size:15pt;letter-spacing:0.2px;color:#36235d;margin:0 0 4mm 0;text-align:center;\">"
+    + escapeHtmlDiagnosis_(reportTitle)
+    + "</h1>"
+    + fieldsHtml
+    + imagesHtml
+    + signatureHtml
+    + "</article>";
+}
+
+function buildDiagnosisTemplateRecipeRowsHtml_(meds) {
+  const rows = Array.isArray(meds) ? meds : [];
+  return rows.map((item) => {
+    const name = escapeHtmlDiagnosis_(String(item && item.nombre || "").trim());
+    if (!name) return "";
+    const qty = escapeHtmlDiagnosis_(String(item && item.cantidad || "").trim());
+    const freq = diagnosisValueToHtmlLines_(item && item.frecuencia);
+    return ""
+      + "<tr>"
+      + "<td style=\"border:1px solid #d6d6e7;padding:2.2mm 2.5mm;font-size:10pt;vertical-align:top;\">" + name + "</td>"
+      + "<td style=\"border:1px solid #d6d6e7;padding:2.2mm 2.5mm;font-size:10pt;text-align:center;vertical-align:top;\">" + (qty || "--") + "</td>"
+      + "<td style=\"border:1px solid #d6d6e7;padding:2.2mm 2.5mm;font-size:10pt;vertical-align:top;\">" + (freq || "--") + "</td>"
+      + "</tr>";
+  }).filter(Boolean).join("");
+}
+
+function buildDiagnosisTemplateRecipeHtml_(payload) {
+  const data = payload || {};
+  const meds = buildDiagnosisRecipeRows_(data);
+  const generatedAt = formatDiagnosisGeneratedAtText_(new Date()).split(",")[0] || formatDiagnosisGeneratedAtText_(new Date());
+  const headerHtml = buildDiagnosisTemplatePatientHeaderHtml_(data, generatedAt);
+  const rowsHtml = buildDiagnosisTemplateRecipeRowsHtml_(meds);
+  const obs = diagnosisValueToHtmlLines_(data.observaciones_receta);
+  const signatureHtml = buildDiagnosisTemplateSignatureHtml_(data);
+
+  return ""
+    + "<article style=\"font-family:Arial,sans-serif;color:#222;\">"
+    + headerHtml
+    + "<h1 style=\"font-size:15pt;letter-spacing:0.2px;color:#36235d;margin:0 0 4mm 0;text-align:center;\">RECETA MEDICA</h1>"
+    + "<table style=\"width:100%;border-collapse:collapse;margin:0 0 3.5mm 0;\">"
+    + "<thead>"
+    + "<tr>"
+    + "<th style=\"border:1px solid #d6d6e7;background:#f2f1fa;color:#36235d;padding:2.2mm 2.5mm;font-size:9.5pt;text-align:center;\">MEDICAMENTO</th>"
+    + "<th style=\"border:1px solid #d6d6e7;background:#f2f1fa;color:#36235d;padding:2.2mm 2.5mm;font-size:9.5pt;text-align:center;width:22mm;\">CANT</th>"
+    + "<th style=\"border:1px solid #d6d6e7;background:#f2f1fa;color:#36235d;padding:2.2mm 2.5mm;font-size:9.5pt;text-align:center;\">INDICACIONES</th>"
+    + "</tr>"
+    + "</thead>"
+    + "<tbody>"
+    + (rowsHtml || "<tr><td colspan=\"3\" style=\"border:1px solid #d6d6e7;padding:2.5mm;font-size:10pt;color:#666;\">Sin medicamentos registrados.</td></tr>")
+    + "</tbody>"
+    + "</table>"
+    + (obs
+      ? "<section style=\"margin-top:2mm; page-break-inside:avoid;\">"
+        + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">OBSERVACIONES</div>"
+        + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + obs + "</div>"
+        + "</section>"
+      : "")
+    + signatureHtml
+    + "</article>";
+}
+
+async function loadDiagnosisHtmlTemplate_() {
+  if (diagnosisHtmlTemplateCache_) return diagnosisHtmlTemplateCache_;
+  const candidates = [
+    DIAGNOSIS_HTML_TEMPLATE_PATH,
+    "./plantilla_vidafem.html",
+    "../plantilla_vidafem.html",
+    "/plantilla_vidafem.html"
+  ];
+  let lastError = "";
+  for (let i = 0; i < candidates.length; i++) {
+    const raw = String(candidates[i] || "").trim();
+    if (!raw) continue;
+    try {
+      const templateUrl = new URL(raw, window.location.href).toString();
+      const response = await fetch(templateUrl, { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) {
+        lastError = "HTTP " + response.status + " en " + templateUrl;
+        continue;
+      }
+      diagnosisHtmlTemplateCache_ = await response.text();
+      if (diagnosisHtmlTemplateCache_) return diagnosisHtmlTemplateCache_;
+    } catch (e) {
+      lastError = (e && e.message) ? e.message : String(e || "");
+    }
+  }
+  throw new Error("No se pudo cargar la plantilla HTML del reporte. " + (lastError || ""));
+}
+
+async function waitForDiagnosisTemplateImages_(root) {
+  const scope = root || document;
+  const images = Array.from(scope.querySelectorAll("img"));
+  if (!images.length) return;
+  await Promise.all(images.map((img) => new Promise((resolve) => {
+    if (img.complete) {
+      resolve();
+      return;
+    }
+    const done = () => resolve();
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+    setTimeout(done, 1500);
+  })));
+}
+
+function isDiagnosisCanvasSliceMostlyBlank_(canvas, startY, sliceHeight) {
+  if (!canvas || sliceHeight <= 0 || sliceHeight > 96) return false;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+  try {
+    const image = ctx.getImageData(0, startY, canvas.width, sliceHeight).data;
+    let nonWhite = 0;
+    const step = 24;
+    for (let y = 0; y < sliceHeight; y += 3) {
+      for (let x = 0; x < canvas.width; x += step) {
+        const idx = ((y * canvas.width) + x) * 4;
+        if (image[idx] < 246 || image[idx + 1] < 246 || image[idx + 2] < 246) {
+          nonWhite += 1;
+          if (nonWhite > 4) return false;
+        }
+      }
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function buildDiagnosisPdfDataUrlFromCanvas_(canvas, JsPdfCtor) {
+  const doc = new JsPdfCtor({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageHeightPx = Math.max(1, Math.round(canvas.width * (pageHeight / pageWidth)));
+  let offsetY = 0;
+  let pageIndex = 0;
+
+  while (offsetY < canvas.height) {
+    const remaining = canvas.height - offsetY;
+    const sliceHeight = Math.min(pageHeightPx, remaining);
+    if (pageIndex > 0 && sliceHeight < 28 && isDiagnosisCanvasSliceMostlyBlank_(canvas, offsetY, sliceHeight)) {
+      break;
+    }
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = sliceHeight;
+    const pageCtx = pageCanvas.getContext("2d");
+    if (!pageCtx) {
+      throw new Error("No se pudo preparar una pagina intermedia del PDF.");
+    }
+    pageCtx.drawImage(canvas, 0, offsetY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+    const imgData = pageCanvas.toDataURL("image/jpeg", 0.95);
+    const renderHeight = (sliceHeight * pageWidth) / canvas.width;
+    if (pageIndex > 0) doc.addPage();
+    doc.addImage(imgData, "JPEG", 0, 0, pageWidth, renderHeight, undefined, "FAST");
+    offsetY += sliceHeight;
+    pageIndex += 1;
+  }
+
+  return doc.output("datauristring");
+}
+
+async function buildDiagnosisPdfFromHtmlTemplateDataUrl_(innerHtmlBuilder) {
+  if (!window.html2canvas) return "";
+  const JsPdfCtor = getDiagnosisJsPdf_();
+  const templateHtml = await loadDiagnosisHtmlTemplate_();
+  if (!templateHtml) return "";
+
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-100000px";
+  host.style.top = "0";
+  host.style.opacity = "1";
+  host.style.pointerEvents = "none";
+  host.style.zIndex = "-1";
+
+  try {
+    host.innerHTML = templateHtml;
+    const content = host.querySelector(".content");
+    const page = host.querySelector(".page");
+    if (!content || !page) return "";
+
+    content.innerHTML = String(typeof innerHtmlBuilder === "function" ? innerHtmlBuilder() : "").trim();
+    if (!content.innerHTML) return "";
+    page.style.overflow = "visible";
+    page.style.boxShadow = "none";
+    page.style.margin = "0";
+
+    document.body.appendChild(host);
+    await waitForDiagnosisTemplateImages_(host);
+
+    const canvas = await window.html2canvas(page, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 2000
+    });
+    if (!canvas || !canvas.width || !canvas.height) return "";
+    return buildDiagnosisPdfDataUrlFromCanvas_(canvas, JsPdfCtor);
+  } finally {
+    if (host && host.parentNode) {
+      host.parentNode.removeChild(host);
+    }
+  }
+}
+
+async function buildDiagnosisReportPdfFromHtmlTemplateDataUrl_(payload, fieldEntries, images) {
+  return buildDiagnosisPdfFromHtmlTemplateDataUrl_(function() {
+    return buildDiagnosisTemplateMainHtml_(payload, fieldEntries, images);
+  });
+}
+
+async function buildDiagnosisRecipePdfFromHtmlTemplateDataUrl_(payload) {
+  return buildDiagnosisPdfFromHtmlTemplateDataUrl_(function() {
+    return buildDiagnosisTemplateRecipeHtml_(payload);
+  });
 }
 
 function diagnosisPdfLabelFromKey_(key, serviceName) {
@@ -636,7 +1051,26 @@ async function buildDiagnosisReportPdfDataUrl_(payload) {
   const data = payload || {};
   const fieldEntries = buildDiagnosisPdfFieldEntries_(data);
   const images = Array.isArray(data.imagenes) ? data.imagenes : [];
-  if (!fieldEntries.length && !images.length) return "";
+
+  const resolvedImages = [];
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i] || {};
+    const dataUrl = await ensureDiagnosisImageDataUrl_(image);
+    if (!dataUrl) continue;
+    resolvedImages.push({
+      title: String(image.title || ("Imagen " + (i + 1))).trim(),
+      size: String(image.size || "small").trim().toLowerCase(),
+      data: dataUrl,
+      dataUrl: dataUrl
+    });
+  }
+
+  try {
+    const htmlTemplatePdf = await buildDiagnosisReportPdfFromHtmlTemplateDataUrl_(data, fieldEntries, resolvedImages);
+    if (htmlTemplatePdf) return htmlTemplatePdf;
+  } catch (e) {
+    console.warn("No se pudo renderizar el PDF con plantilla HTML, se usa fallback clasico.", e);
+  }
 
   const jsPDF = getDiagnosisJsPdf_();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -674,9 +1108,10 @@ async function buildDiagnosisReportPdfDataUrl_(payload) {
     y = writeDiagnosisPdfField_(doc, y, entry.label, entry.value);
   });
 
-  y = await appendDiagnosisPdfImages_(doc, y + 2, images);
+  y = await appendDiagnosisPdfImages_(doc, y + 2, resolvedImages);
 
   if (data.incluir_firma_virtual) {
+    y += 30;
     y = ensureDiagnosisPdfSpace_(doc, y, 20);
     doc.setDrawColor(190, 190, 190);
     doc.line(120, y + 8, 190, y + 8);
@@ -693,6 +1128,13 @@ async function buildDiagnosisRecipePdfDataUrl_(payload) {
   const meds = buildDiagnosisRecipeRows_(data);
   const obs = String(data.observaciones_receta || "").trim();
   if (!meds.length && !obs) return "";
+
+  try {
+    const htmlTemplatePdf = await buildDiagnosisRecipePdfFromHtmlTemplateDataUrl_(data);
+    if (htmlTemplatePdf) return htmlTemplatePdf;
+  } catch (e) {
+    console.warn("No se pudo renderizar la receta con plantilla HTML, se usa fallback clasico.", e);
+  }
 
   const jsPDF = getDiagnosisJsPdf_();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -745,6 +1187,7 @@ async function buildDiagnosisRecipePdfDataUrl_(payload) {
   }
 
   if (data.incluir_firma_virtual) {
+    y += 30;
     y = ensureDiagnosisPdfSpace_(doc, y, 20);
     doc.setDrawColor(190, 190, 190);
     doc.line(120, y + 8, 190, y + 8);
@@ -759,8 +1202,12 @@ async function buildDiagnosisRecipePdfDataUrl_(payload) {
 async function buildDiagnosisPdfPayloadsForSave_(payload) {
   const data = payload || {};
   const out = {};
+  const examType = String(data.tipo_examen || "").trim().toUpperCase();
+  const isRecipeOnly = examType === "RECETA";
+  const isExternalPdfOnly = examType === "EXAMENPDF";
+  const shouldBuildReport = !isRecipeOnly && !isExternalPdfOnly && hasMeaningfulClinicalPdfContent_(data);
 
-  if (hasMeaningfulClinicalPdfContent_(data)) {
+  if (shouldBuildReport) {
     const reportPdf = await buildDiagnosisReportPdfDataUrl_(data);
     if (reportPdf) out.report_pdf_data_url = reportPdf;
   }

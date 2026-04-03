@@ -35,7 +35,8 @@ function getSessionDataSafe() {
 function requireDoctorSession() {
   const s = getSessionDataSafe();
   const role = s && s.role ? String(s.role).toLowerCase() : "";
-  if (!s || (role !== "admin" && role !== "doctor")) {
+  const token = s ? String(s.session_token || "").trim() : "";
+  if (!s || !token || (role !== "admin" && role !== "doctor")) {
     alert("Sesión inválida o expirada. Inicia sesión nuevamente.");
     try { sessionStorage.removeItem("vidafem_session"); } catch (e) {}
     window.navigateWithEnv("index.html");

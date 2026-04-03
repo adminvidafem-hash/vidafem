@@ -86,6 +86,8 @@ async function handleFirstLoginFlow(sessionData) {
     }
 
     try {
+        sessionData.backend_runtime = (window.VF_API_RUNTIME && window.VF_API_RUNTIME.backend) || "";
+        sessionData.api_url = String(window.API_URL || API_URL || "").trim();
         sessionStorage.setItem("vidafem_session", JSON.stringify(sessionData));
     } catch (e) {}
 
@@ -132,7 +134,10 @@ if (loginForm) {
                 
                 // Guardar sesión completa (incluye el rol) en sessionStorage (no persistente)
                 try {
-                    sessionStorage.setItem("vidafem_session", JSON.stringify(data));
+                    const sessionToStore = Object.assign({}, data || {});
+                    sessionToStore.backend_runtime = (window.VF_API_RUNTIME && window.VF_API_RUNTIME.backend) || "";
+                    sessionToStore.api_url = String(window.API_URL || API_URL || "").trim();
+                    sessionStorage.setItem("vidafem_session", JSON.stringify(sessionToStore));
                 } catch(e) {
                     console.warn('No se pudo guardar la sesión en sessionStorage', e);
                 }

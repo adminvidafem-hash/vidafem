@@ -13,8 +13,8 @@ const SIGNATURE_ID = "1eR6B-HWTblsaQ3Mff5r6EzJFC-QC_xat";
 // Carpeta raiz separada para no mezclar archivos de prueba con produccion.
 const DRIVE_ROOT_FOLDER = "VIDAFEM_EXPEDIENTES_PRUEBAS";
 
-// En pruebas se dejan apagados para no enviar correos reales por accidente.
-const EMAILS_ENABLED = false;
+// Correos de citas habilitados para validar notificaciones end-to-end.
+const EMAILS_ENABLED = true;
 
 // Nombres exactos de las pestañas
 const SHEETS = {

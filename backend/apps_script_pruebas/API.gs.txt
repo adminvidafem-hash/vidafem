@@ -666,6 +666,17 @@ function doPost(e) {
         response = rescheduleAppointment(data.data);
         break;
 
+      case "worker_send_cita_notifications":
+        if (!isWorkerBridgeAuthorized_(data.bridge_token)) {
+          response = {
+            success: false,
+            message: "Acceso denegado. Bridge token invalido o no configurado en Script Properties (VIDAFEM_WORKER_BRIDGE_TOKEN / WORKER_BRIDGE_TOKEN)."
+          };
+          break;
+        }
+        response = sendWorkerAppointmentNotifications_(data.data || {});
+        break;
+
       case "update_appt_status":
         // Validar requester: solo doctor propietario o paciente (según contexto) puede cambiar estado
         if (!data.requester) { response = { success: false, message: 'Acceso denegado: requester faltante' }; break; }
@@ -1153,6 +1164,54 @@ function logoutSession_(token) {
     CacheService.getScriptCache().remove(getSessionCacheKey_(t));
   } catch (e) {}
   return { success: true, message: "Sesion cerrada." };
+}
+
+function isWorkerBridgeAuthorized_(bridgeToken) {
+  const incoming = normalizeWorkerBridgeToken_(bridgeToken);
+  if (!incoming) return false;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const candidates = [
+      "VIDAFEM_WORKER_BRIDGE_TOKEN",
+      "WORKER_BRIDGE_TOKEN"
+    ];
+    for (let i = 0; i < candidates.length; i++) {
+      const expectedRaw = String(props.getProperty(candidates[i]) || "").trim();
+      if (!expectedRaw) continue;
+      const expectedList = splitWorkerBridgeTokens_(expectedRaw);
+      for (let j = 0; j < expectedList.length; j++) {
+        if (incoming === expectedList[j]) return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function normalizeWorkerBridgeToken_(value) {
+  let token = String(value || "").trim();
+  if (!token) return "";
+  if ((token.charAt(0) === '"' && token.charAt(token.length - 1) === '"') ||
+      (token.charAt(0) === "'" && token.charAt(token.length - 1) === "'")) {
+    token = token.substring(1, token.length - 1).trim();
+  }
+  return token;
+}
+
+function splitWorkerBridgeTokens_(rawValue) {
+  const raw = String(rawValue || "").trim();
+  if (!raw) return [];
+  const parts = raw.split(/[\s,;]+/);
+  const out = [];
+  const seen = {};
+  for (let i = 0; i < parts.length; i++) {
+    const token = normalizeWorkerBridgeToken_(parts[i]);
+    if (!token || seen[token]) continue;
+    seen[token] = true;
+    out.push(token);
+  }
+  return out;
 }
 
 function logApiTiming_(action, startMs, response) {

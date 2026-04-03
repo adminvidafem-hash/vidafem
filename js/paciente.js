@@ -101,13 +101,13 @@ function syncPatientHeroPlacement_() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. VERIFICAR SESIÓN
-    const session = sessionStorage.getItem("vidafem_session");
-    if (!session) {
+    const sessionData = getPatientSessionData_();
+    const token = sessionData ? String(sessionData.session_token || "").trim() : "";
+    if (!sessionData || !token) {
         window.navigateWithEnv("index.html");
         return;
     }
     
-    const sessionData = JSON.parse(session);
     // Verificación de seguridad extra
     if (sessionData.role !== 'paciente') {
         window.navigateWithEnv("index.html");
@@ -1188,6 +1188,7 @@ if(formResch) {
         .then(res => {
             if(res.success) {
                 notify("Cita reagendada con exito.", "success");
+                if (res.warning) notify(String(res.warning), "warning");
                 window.closeModal('modalPatientReschedule');
                 refreshAllData(); 
             } else {
@@ -1606,6 +1607,7 @@ if(formSelf) {
             if(!res) return;
             if(res.success) {
                 notify("Cita agendada con exito.", "success");
+                if (res.warning) notify(String(res.warning), "warning");
                 window.closeModal('modalSelfAppt');
                 resetSelfScheduleForm();
                 refreshAllData();

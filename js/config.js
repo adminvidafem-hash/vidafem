@@ -73,6 +73,7 @@ function resolveApiRuntime_() {
   let source = "default";
   let backend = "";
   let backendSource = "default";
+  let backendForcedReason = "";
   try {
     const params = new URLSearchParams(window.location.search || "");
     const raw = String(params.get("vf_env") || "").trim().toLowerCase();
@@ -110,9 +111,7 @@ function resolveApiRuntime_() {
   }
 
   if (!backend) {
-    backend = env === "prod" && String(PROD_WORKER_API_URL || "").trim()
-      ? "worker"
-      : "apps_script";
+    backend = env === "prod" ? "worker" : "apps_script";
   }
 
   const apiTarget = resolveApiUrlByRuntime_(env, backend);
@@ -123,6 +122,7 @@ function resolveApiRuntime_() {
     backend: apiTarget.backend,
     requested_backend: apiTarget.requested_backend,
     backend_source: backendSource,
+    backend_forced_reason: backendForcedReason,
     url: apiTarget.url
   };
 }
@@ -232,15 +232,53 @@ const MESSAGES = {
   success: "Bienvenido a VIDAFEM!"
 };
 
-function getSessionToken_() {
+function getSessionData_() {
   try {
     const raw = sessionStorage.getItem("vidafem_session");
-    if (!raw) return "";
-    const session = JSON.parse(raw);
-    return String((session && session.session_token) || "").trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch (e) {
-    return "";
+    return null;
   }
+}
+
+function clearRuntimeSession_(message) {
+  try { sessionStorage.removeItem("vidafem_session"); } catch (e) {}
+  const isLoginPage = /\/index\.html$/i.test(String(window.location.pathname || ""));
+  if (!isLoginPage) {
+    if (!window.__vfSession401Redirecting) {
+      window.__vfSession401Redirecting = true;
+      if (message) {
+        try {
+          if (window.showToast) window.showToast(message, "warning", 2600);
+          else alert(message);
+        } catch (e) {}
+      }
+      setTimeout(function () {
+        window.navigateWithEnv("index.html");
+      }, 120);
+    }
+  }
+}
+
+function ensureSessionBackendCompatibility_() {
+  const currentBackend = normalizeBackendRuntime_(VF_API_RUNTIME && VF_API_RUNTIME.backend);
+  if (!currentBackend) return;
+
+  const session = getSessionData_();
+  if (!session || !session.session_token) return;
+
+  const sessionBackend = normalizeBackendRuntime_(session.backend_runtime || session.backend);
+  if (!sessionBackend) return; // Sesiones legacy: se validan por 401.
+  if (sessionBackend === currentBackend) return;
+
+  clearRuntimeSession_("Se detecto un cambio de backend. Inicia sesion nuevamente.");
+}
+
+function getSessionToken_() {
+  const session = getSessionData_();
+  return String((session && session.session_token) || "").trim();
 }
 
 window.getSessionToken = getSessionToken_;
@@ -278,10 +316,14 @@ window.apiLogoutSession = async function apiLogoutSession() {
 
       const opts = init ? Object.assign({}, init) : {};
       const method = String((opts.method || "GET")).toUpperCase();
+      let actionName = "";
 
       if (isApiCall && method === "POST" && typeof opts.body === "string" && opts.body) {
         const payload = JSON.parse(opts.body);
-        if (payload && typeof payload === "object" && payload.action !== "login" && !payload.session_token) {
+        if (payload && typeof payload === "object") {
+          actionName = String(payload.action || "").trim().toLowerCase();
+        }
+        if (payload && typeof payload === "object" && actionName !== "login" && !payload.session_token) {
           const token = getSessionToken_();
           if (token) {
             payload.session_token = token;
@@ -290,12 +332,23 @@ window.apiLogoutSession = async function apiLogoutSession() {
         }
       }
 
-      return originalFetch(input, opts);
+      return originalFetch(input, opts).then(function (response) {
+        if (!isApiCall || method !== "POST" || actionName === "login" || response.status !== 401) {
+          return response;
+        }
+        if (window.__vfSession401Redirecting) {
+          return response;
+        }
+        clearRuntimeSession_("Tu sesion expiro o no es valida para este backend. Inicia sesion nuevamente.");
+        return response;
+      });
     } catch (e) {
       return originalFetch(input, init);
     }
   };
 })();
+
+ensureSessionBackendCompatibility_();
 
 // Toast global en pantalla (reemplaza alerts en flujos criticos)
 (function initGlobalToast() {

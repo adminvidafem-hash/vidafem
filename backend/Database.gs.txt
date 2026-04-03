@@ -1660,7 +1660,7 @@ function sendAppointmentEmailToPatient(email, nombre, dataObj, idCita) {
 function sendAppointmentEmailToDoctor(doctorEmail, doctorName, patientName, patientPhone, dataObj, idCita, isReschedule) {
   if (!doctorEmail || doctorEmail.indexOf("@") === -1) return;
 
-  const actionTitle = isReschedule ? "Cita Reagendada por Paciente" : "Nueva Cita Agendada por Paciente";
+  const actionTitle = isReschedule ? "Cita Reagendada" : "Nueva Cita Agendada";
   const waLink = buildWhatsappLink_(patientPhone, dataObj.fecha, dataObj.hora);
   const waButton = waLink ? `
       <div style="text-align:center; margin: 25px 0;">
@@ -1691,6 +1691,30 @@ function sendAppointmentEmailToDoctor(doctorEmail, doctorName, patientName, pati
     </div>
   `;
   MailApp.sendEmail({ to: doctorEmail, subject: "Notificación de Cita - VIDAFEM", htmlBody: html });
+}
+
+function sendRescheduleEmailToPatient_(email, patientName, newDate, newTime) {
+  const to = String(email || "").trim();
+  if (!to || to.indexOf("@") === -1) return false;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
+      <div style="background-color: #f39c12; padding: 20px; text-align: center; color: white;">
+        <h2>Cita Reagendada</h2>
+      </div>
+      <div style="padding: 20px;">
+        <p>Hola <strong>${String(patientName || "Paciente").trim()}</strong>,</p>
+        <p>Tu cita ha sido movida exitosamente a una nueva fecha:</p>
+        <div style="background-color: #fcf8e3; padding: 15px; border-left: 5px solid #f39c12; margin: 20px 0;">
+          <p><strong>Nueva Fecha:</strong> ${String(newDate || "").trim()}</p>
+          <p><strong>Nueva Hora:</strong> ${String(newTime || "").trim()}</p>
+        </div>
+        <p>Si tienes dudas, contactanos.</p>
+      </div>
+    </div>
+  `;
+  MailApp.sendEmail({ to: to, subject: "Actualización de Cita - VIDAFEM", htmlBody: html });
+  return true;
 }
 
 function buildWhatsappLink_(phone, fecha, hora) {
@@ -1756,6 +1780,118 @@ function getDefaultDoctorContact_() {
     return { email: "", name: "" };
   }
 }
+
+function sendWorkerAppointmentNotifications_(payload) {
+  const data = payload || {};
+  const eventType = String(data.event || "").trim().toLowerCase();
+  const appointmentId = String(data.id_cita || data.appointment_id || "").trim();
+  const patientId = String(data.id_paciente || "").trim();
+  if (!eventType || !appointmentId || !patientId) {
+    return { success: false, message: "Faltan datos para notificar la cita." };
+  }
+
+  const patient = findRow("pacientes", "id_paciente", patientId);
+  const payloadPatientName = String(data.patient_nombre || data.nombre_paciente || "").trim();
+  const payloadPatientEmail = String(data.patient_email || data.correo_paciente || "").trim().toLowerCase();
+  const payloadPatientPhone = String(data.patient_telefono || data.telefono_paciente || "").trim();
+  const payloadDoctorEmail = String(data.doctor_email || data.correo_doctor || "").trim().toLowerCase();
+  const payloadDoctorName = String(data.doctor_nombre || data.nombre_doctor || "").trim();
+  const payloadDoctorPhone = String(data.doctor_telefono || data.telefono_doctor || "").trim();
+
+  if (!patient && !payloadPatientEmail && !payloadDoctorEmail) {
+    return { success: false, message: "Paciente no encontrado para notificar." };
+  }
+
+  const patientName = payloadPatientName || String((patient && patient.nombre_completo) || "Estimado Paciente").trim();
+  const patientEmail = payloadPatientEmail || String((patient && patient.correo) || "").trim();
+  const patientPhone = payloadPatientPhone || String((patient && patient.telefono) || "").trim();
+  const fecha = String(data.fecha || data.nueva_fecha || "").trim();
+  const hora = String(data.hora || data.nueva_hora || "").trim();
+  const motivo = String(data.motivo || "").trim();
+  const recomendaciones = String(data.recomendaciones || "").trim();
+  const doctorInfo = {
+    email: payloadDoctorEmail,
+    name: payloadDoctorName,
+    phone: payloadDoctorPhone
+  };
+  if ((!doctorInfo.email || !doctorInfo.name || !doctorInfo.phone) && patient) {
+    const sheetDoctor = getDoctorContactForPatient_(patient) || { email: "", name: "", phone: "" };
+    if (!doctorInfo.email) doctorInfo.email = String(sheetDoctor.email || "").trim();
+    if (!doctorInfo.name) doctorInfo.name = String(sheetDoctor.name || "").trim();
+    if (!doctorInfo.phone) doctorInfo.phone = String(sheetDoctor.phone || "").trim();
+  }
+  if ((!doctorInfo.email || !doctorInfo.name || !doctorInfo.phone) && !patient) {
+    const fallbackDoctor = getDefaultDoctorContact_() || { email: "", name: "", phone: "" };
+    if (!doctorInfo.email) doctorInfo.email = String(fallbackDoctor.email || "").trim();
+    if (!doctorInfo.name) doctorInfo.name = String(fallbackDoctor.name || "").trim();
+    if (!doctorInfo.phone) doctorInfo.phone = String(fallbackDoctor.phone || "").trim();
+  }
+
+  let sentPatient = false;
+  let sentDoctor = false;
+  const doctorPhone = String(doctorInfo.phone || "").trim();
+
+  try {
+    if (eventType === "schedule") {
+      if (patientEmail && patientEmail.indexOf("@") !== -1) {
+        sendAppointmentEmailToPatient(patientEmail, patientName, {
+          fecha: fecha,
+          hora: hora,
+          recomendaciones: recomendaciones
+        }, appointmentId);
+        sentPatient = true;
+      }
+      if (doctorInfo.email && String(doctorInfo.email).indexOf("@") !== -1) {
+        sendAppointmentEmailToDoctor(
+          doctorInfo.email,
+          doctorInfo.name,
+          patientName,
+          patientPhone,
+          { fecha: fecha, hora: hora, motivo: motivo, recomendaciones: recomendaciones },
+          appointmentId,
+          false
+        );
+        sentDoctor = true;
+      }
+    } else if (eventType === "reschedule") {
+      sentPatient = sendRescheduleEmailToPatient_(patientEmail, patientName, fecha, hora) || false;
+      if (doctorInfo.email && String(doctorInfo.email).indexOf("@") !== -1) {
+        sendAppointmentEmailToDoctor(
+          doctorInfo.email,
+          doctorInfo.name,
+          patientName,
+          patientPhone,
+          { fecha: fecha, hora: hora, motivo: motivo || "REAGENDADO" },
+          appointmentId,
+          true
+        );
+        sentDoctor = true;
+      }
+    } else {
+      return { success: false, message: "Evento de notificacion no soportado." };
+    }
+  } catch (e) {
+    return { success: false, message: "Error enviando notificaciones: " + e.toString() };
+  }
+
+  if (!sentPatient && !sentDoctor) {
+    return {
+      success: false,
+      message: "No se envio ningun correo. Verifica el correo del paciente y el correo_notificaciones del doctor.",
+      sent_patient_email: false,
+      sent_doctor_email: false,
+      doctor_phone: doctorPhone
+    };
+  }
+
+  return {
+    success: true,
+    message: "Notificaciones procesadas.",
+    sent_patient_email: !!sentPatient,
+    sent_doctor_email: !!sentDoctor,
+    doctor_phone: doctorPhone
+  };
+}
 // --- FUNCIÓN DE REAGENDAMIENTO 1.2 ---
 function rescheduleAppointment(dataObj) {
   const ensured = ensureAppointmentsSheetHeaders_();
@@ -1792,28 +1928,8 @@ function rescheduleAppointment(dataObj) {
   const idPaciente = sheet.getRange(rowIndex, 2).getValue();
   const paciente = findRow("pacientes", "id_paciente", idPaciente);
   
-  // 3. Enviar Correo de Notificación
-  if (paciente && paciente.correo && paciente.correo.includes("@")) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
-        <div style="background-color: #f39c12; padding: 20px; text-align: center; color: white;">
-          <h2>📅 Cita Reagendada</h2>
-        </div>
-        <div style="padding: 20px;">
-          <p>Hola <strong>${paciente.nombre_completo}</strong>,</p>
-          <p>Tu cita ha sido movida exitosamente a una nueva fecha:</p>
-          
-          <div style="background-color: #fcf8e3; padding: 15px; border-left: 5px solid #f39c12; margin: 20px 0;">
-            <p><strong>🗓️ Nueva Fecha:</strong> ${dataObj.nueva_fecha}</p>
-            <p><strong>⏰ Nueva Hora:</strong> ${dataObj.nueva_hora}</p>
-          </div>
-          
-          <p>Si tienes dudas, contáctanos.</p>
-        </div>
-      </div>
-    `;
-    MailApp.sendEmail({ to: paciente.correo, subject: "Actualización de Cita - VIDAFEM", htmlBody: html });
-  }
+  // 3. Enviar correo al paciente
+  if (paciente) sendRescheduleEmailToPatient_(paciente.correo, paciente.nombre_completo, dataObj.nueva_fecha, dataObj.nueva_hora);
 
   // 4. Notificar al médico (si existe) con botón WhatsApp al paciente
   let doctorInfo = { email: "", name: "", phone: "" };

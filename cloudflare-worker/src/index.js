@@ -1544,6 +1544,11 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
       pdf_receta_url: normalizeText_(storedPayload.pdf_receta_link),
       pdf_externo_url: normalizeText_(storedPayload.pdf_externo_link),
       pdf_externos: Array.isArray(storedPayload.pdf_externos) ? storedPayload.pdf_externos : [],
+      storage_info: {
+        backend: hasWorkerStorageBinding_(env) ? "r2" : "none",
+        report_key: normalizeText_(prepared.reportPdfKey),
+        recipe_key: normalizeText_(prepared.recipePdfKey)
+      },
       warning: cleanupWarning
     }
   };
@@ -2213,16 +2218,40 @@ async function handleScheduleAppointment_(body, env) {
     return errorResult_(500, insertRes.message || "No se pudo guardar la cita.");
   }
 
+  const notifyRes = await sendAppointmentNotificationsByBridge_(env, {
+    event: "schedule",
+    id_cita: record.id_cita,
+    id_paciente: record.id_paciente,
+    creado_por: createdBy,
+    fecha: fecha,
+    hora: hora,
+    motivo: motivo,
+    recomendaciones: normalizeText_(record.recomendaciones_serv),
+    patient_email: normalizeLower_(patientAccess.patient.correo),
+    patient_nombre: normalizeText_(patientAccess.patient.nombre_completo),
+    patient_telefono: normalizeText_(patientAccess.patient.telefono),
+    doctor_email: normalizeLower_(doctor && (doctor.correo_notificaciones || doctor.correo)),
+    doctor_nombre: normalizeText_(doctor && (doctor.nombre_doctor || doctor.nombre || patientAccess.patient.creado_por)),
+    doctor_telefono: normalizeText_(doctor && doctor.telefono)
+  });
+  const notifyWarning = !notifyRes.success
+    ? (notifyRes.message || "La cita se guardo, pero no se pudo enviar el correo de notificacion.")
+    : "";
+  const responseMessage = notifyWarning
+    ? "Cita procesada correctamente. Advertencia: " + notifyWarning
+    : "Cita procesada correctamente.";
+
   return {
     status: 200,
     payload: {
       success: true,
-      message: "Cita procesada correctamente.",
+      message: responseMessage,
       id_cita: record.id_cita,
       telefono: normalizeText_(patientAccess.patient.telefono),
       nombre: normalizeText_(patientAccess.patient.nombre_completo),
       doctor_phone: normalizeText_(doctor && doctor.telefono),
-      duracion_minutos: durationMinutes
+      duracion_minutos: durationMinutes,
+      warning: notifyWarning
     }
   };
 }
@@ -2290,12 +2319,33 @@ async function handleRescheduleAppointment_(body, env) {
   }
 
   const doctor = await loadUserByRoleAndId_(env, "admin", access.patient.creado_por);
+  const notifyRes = await sendAppointmentNotificationsByBridge_(env, {
+    event: "reschedule",
+    id_cita: appointmentId,
+    id_paciente: normalizeText_(access.patient.id_paciente),
+    fecha: nuevaFecha,
+    hora: nuevaHora,
+    motivo: normalizeText_(access.appointment && access.appointment.motivo) || "REAGENDADO",
+    patient_email: normalizeLower_(access.patient.correo),
+    patient_nombre: normalizeText_(access.patient.nombre_completo),
+    patient_telefono: normalizeText_(access.patient.telefono),
+    doctor_email: normalizeLower_(doctor && (doctor.correo_notificaciones || doctor.correo)),
+    doctor_nombre: normalizeText_(doctor && (doctor.nombre_doctor || doctor.nombre || access.patient.creado_por)),
+    doctor_telefono: normalizeText_(doctor && doctor.telefono)
+  });
+  const notifyWarning = !notifyRes.success
+    ? (notifyRes.message || "La cita se reagendo, pero no se pudo enviar el correo de notificacion.")
+    : "";
+  const responseMessage = notifyWarning
+    ? "Cita reagendada correctamente. Advertencia: " + notifyWarning
+    : "Cita reagendada correctamente.";
   return {
     status: 200,
     payload: {
       success: true,
-      message: "Cita reagendada correctamente.",
-      doctor_phone: normalizeText_(doctor && doctor.telefono)
+      message: responseMessage,
+      doctor_phone: normalizeText_(doctor && doctor.telefono),
+      warning: notifyWarning
     }
   };
 }
@@ -3647,6 +3697,101 @@ async function proxyToAppsScript_(body, env) {
   }
 }
 
+async function sendAppointmentNotificationsByBridge_(env, payload) {
+  const targetUrl = normalizeText_(env && env.APPS_SCRIPT_API_URL);
+  const bridgeTokens = resolveBridgeTokenCandidates_(env);
+  if (!targetUrl || !bridgeTokens.length) {
+    return {
+      success: false,
+      skipped: true,
+      message: "Puente de correo no configurado."
+    };
+  }
+
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  let lastError = "";
+  let authRejected = false;
+
+  for (const bridgeToken of bridgeTokens) {
+    const body = {
+      action: "worker_send_cita_notifications",
+      bridge_token: bridgeToken,
+      data: safePayload
+    };
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const text = await response.text();
+      const parsed = safeJsonParse_(text);
+      if (!parsed || typeof parsed !== "object") {
+        lastError = "El puente de correo respondio en formato no JSON.";
+        continue;
+      }
+      if (parsed.success) {
+        return { success: true };
+      }
+
+      const msg = normalizeText_(parsed.message) || "No se pudieron enviar las notificaciones de correo.";
+      lastError = msg;
+      const msgLower = msg.toLowerCase();
+      if (msgLower.indexOf("acceso denegado") === 0 || msgLower.indexOf("bridge token") > -1) {
+        authRejected = true;
+        continue;
+      }
+      // Error funcional (no de token): no tiene sentido intentar con otro token.
+      return { success: false, message: msg };
+    } catch (error) {
+      lastError = "No se pudo contactar el puente de correo: " + toErrorMessage(error);
+      continue;
+    }
+  }
+
+  if (authRejected) {
+    return {
+      success: false,
+      message: "Bridge token rechazado por Apps Script. Configura el mismo token en ambos lados: Worker (.dev.vars: WORKER_BRIDGE_TOKEN o WORKER_BRIDGE_TOKENS) y Apps Script Script Properties (VIDAFEM_WORKER_BRIDGE_TOKEN o WORKER_BRIDGE_TOKEN)."
+    };
+  }
+
+  return {
+    success: false,
+    message: lastError || "No se pudieron enviar las notificaciones de correo."
+  };
+}
+
+function resolveBridgeTokenCandidates_(env) {
+  const rawList = [
+    normalizeText_(env && env.WORKER_BRIDGE_TOKENS),
+    normalizeText_(env && env.WORKER_BRIDGE_TOKEN)
+  ];
+  const out = [];
+  const seen = {};
+  rawList.forEach(function(raw) {
+    if (!raw) return;
+    raw.split(/[\s,;]+/).forEach(function(token) {
+      const clean = normalizeBridgeTokenValueWorker_(token);
+      if (!clean || seen[clean]) return;
+      seen[clean] = true;
+      out.push(clean);
+    });
+  });
+  return out;
+}
+
+function normalizeBridgeTokenValueWorker_(value) {
+  let token = normalizeText_(value);
+  if (!token) return "";
+  if ((token.charAt(0) === '"' && token.charAt(token.length - 1) === '"') ||
+      (token.charAt(0) === "'" && token.charAt(token.length - 1) === "'")) {
+    token = normalizeText_(token.substring(1, token.length - 1));
+  }
+  return token;
+}
+
 async function requireValidSession_(env, token) {
   const rawToken = normalizeText_(token);
   if (!rawToken) return { ok: false };
@@ -4546,7 +4691,9 @@ function decodeStorageObjectPath_(path) {
 
 function parseDataUrlWorker_(value) {
   const raw = normalizeText_(value);
-  const match = raw.match(/^data:([^;,]+);base64,(.+)$/);
+  // Acepta data URLs con parametros opcionales antes de ";base64"
+  // Ejemplo comun de jsPDF: data:application/pdf;filename=generated.pdf;base64,....
+  const match = raw.match(/^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/);
   if (!match) return null;
   return {
     mime: normalizeText_(match[1]),
@@ -4666,6 +4813,37 @@ async function uploadDataUrlToWorkerStorage_(env, requestUrl, objectPath, dataUr
   };
 }
 
+async function uploadBinaryToWorkerStorage_(env, requestUrl, objectPath, binary, options) {
+  const bucket = getWorkerStorageBucket_(env);
+  const objectKey = decodeStorageObjectPath_(objectPath);
+  if (!bucket || !objectKey || !binary) {
+    return { success: false, message: "Archivo binario invalido." };
+  }
+
+  const opts = options && typeof options === "object" ? options : {};
+  const contentType = normalizeText_(opts.contentType) || "application/octet-stream";
+  const contentDisposition = normalizeText_(opts.contentDisposition);
+  const payload = binary instanceof Uint8Array ? binary : new Uint8Array(binary);
+
+  try {
+    await bucket.put(objectKey, payload, {
+      httpMetadata: {
+        contentType: contentType,
+        cacheControl: WORKER_STORAGE_CACHE_CONTROL,
+        contentDisposition: contentDisposition || (contentType === "application/pdf" ? "inline" : undefined)
+      }
+    });
+  } catch (error) {
+    return { success: false, message: "No se pudo guardar el archivo en Cloudflare R2: " + toErrorMessage(error) };
+  }
+
+  return {
+    success: true,
+    key: objectKey,
+    url: buildWorkerStoragePublicUrl_(requestUrl, objectKey)
+  };
+}
+
 async function deleteWorkerStorageObjectByKey_(env, objectKey) {
   const bucket = getWorkerStorageBucket_(env);
   const key = decodeStorageObjectPath_(objectKey);
@@ -4758,6 +4936,8 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
   const out = Object.assign({}, src);
   let reportPdfUrl = "";
   let recipePdfUrl = "";
+  let reportPdfKey = "";
+  let recipePdfKey = "";
 
   if (Object.prototype.hasOwnProperty.call(src, "imagenes")) {
     const images = [];
@@ -4874,6 +5054,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
       return { success: false, status: 500, message: upload.message || "No se pudo guardar el PDF principal." };
     }
     reportPdfUrl = upload.url;
+    reportPdfKey = upload.key || "";
   }
 
   const recipePdfDataUrl = normalizeText_(src.recipe_pdf_data_url);
@@ -4893,6 +5074,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
       return { success: false, status: 500, message: upload.message || "No se pudo guardar el PDF de receta." };
     }
     recipePdfUrl = upload.url;
+    recipePdfKey = upload.key || "";
   }
 
   delete out.report_pdf_data_url;
@@ -4902,7 +5084,9 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
     success: true,
     data: out,
     reportPdfUrl: reportPdfUrl,
-    recipePdfUrl: recipePdfUrl
+    recipePdfUrl: recipePdfUrl,
+    reportPdfKey: reportPdfKey,
+    recipePdfKey: recipePdfKey
   };
 }
 

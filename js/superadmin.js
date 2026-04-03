@@ -15,7 +15,8 @@ function getSessionSafe_() {
 
 function getSuperadminUser_() {
   const s = getSessionSafe_();
-  if (!s || String(s.role || "").toLowerCase() !== "superadmin") return null;
+  const token = s ? String(s.session_token || "").trim() : "";
+  if (!s || !token || String(s.role || "").toLowerCase() !== "superadmin") return null;
   return s.data && (s.data.usuario || s.data.username || s.data.nombre_doctor);
 }
 
