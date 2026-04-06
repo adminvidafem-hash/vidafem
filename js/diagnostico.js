@@ -1925,7 +1925,8 @@ async function buildDiagnosisPdfPayloadsForSave_(payload) {
   const examType = String(data.tipo_examen || "").trim().toUpperCase();
   const isRecipeOnly = examType === "RECETA";
   const isExternalPdfOnly = examType === "EXAMENPDF";
-  const shouldBuildReport = !isRecipeOnly && !isExternalPdfOnly && hasMeaningfulClinicalPdfContent_(data);
+  const isCertificateOnly = examType === "CERTIFICADO MEDICO" || examType === "CERTIFICADOMEDICO";
+  const shouldBuildReport = !isRecipeOnly && !isExternalPdfOnly && !isCertificateOnly && hasMeaningfulClinicalPdfContent_(data);
 
   if (shouldBuildReport) {
     const reportPdf = await buildDiagnosisReportPdfDataUrl_(data);
@@ -3176,6 +3177,12 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
         throw new Error("Adjunta un archivo PDF antes de guardar en EXAMENPDF.");
       }
     }
+    if (tipo === "CERTIFICADO MEDICO") {
+      const hasCertificateContent = hasMeaningfulMedicalCertificateContent_(specificData);
+      if (!hasCertificateContent) {
+        throw new Error("Completa el certificado medico antes de guardar en este modo.");
+      }
+    }
     if (tipo === "TODO") {
       const hasRecipeContent = hasMeaningfulRecipeContent_(specificData);
       const hasCertificateContent = hasMeaningfulMedicalCertificateContent_(specificData);
@@ -3251,6 +3258,8 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
 
           if (tipo === "EXAMENPDF") {
             targetPdfUrl = externalPdf || certificatePdf || recipePdf || primaryPdf;
+          } else if (tipo === "CERTIFICADO MEDICO") {
+            targetPdfUrl = certificatePdf || recipePdf || externalPdf || primaryPdf;
           } else if (tipo === "RECETA") {
             targetPdfUrl = recipePdf || certificatePdf || externalPdf || primaryPdf;
           } else if (tipo === "TODO") {
@@ -3865,6 +3874,7 @@ const LEGACY_COLPOSCOPY_VALUE = "__legacy_colposcopia__";
 const LEGACY_GENERAL_VALUE = "__legacy_consulta_general__";
 const EXTERNAL_PDF_ONLY_VALUE = "examenpdf";
 const EVERYTHING_VALUE = "todo";
+const CERTIFICATE_ONLY_VALUE = "certificadomedico";
 
 function isRecipeService_(value) {
   const raw = String(value || "").trim();
@@ -3879,6 +3889,12 @@ function isEverythingService_(value) {
 function isExternalPdfOnlyService_(value) {
   const raw = String(value || "").trim();
   return raw.toLowerCase() === EXTERNAL_PDF_ONLY_VALUE || raw.toUpperCase() === "EXAMENPDF";
+}
+
+function isCertificateOnlyService_(value) {
+  const raw = String(value || "").trim();
+  const upper = raw.toUpperCase();
+  return raw.toLowerCase() === CERTIFICATE_ONLY_VALUE || upper === "CERTIFICADO MEDICO" || upper === "CERTIFICADOMEDICO";
 }
 
 function isLegacyColposcopyService_(value) {
@@ -3915,6 +3931,7 @@ function resolveReportServiceValue_(tipoExamen) {
   if (upper === "RECETA") return "receta";
   if (upper === "TODO") return EVERYTHING_VALUE;
   if (upper === "EXAMENPDF" || upper === "EXAMEN PDF") return EXTERNAL_PDF_ONLY_VALUE;
+  if (upper === "CERTIFICADO MEDICO" || upper === "CERTIFICADOMEDICO") return CERTIFICATE_ONLY_VALUE;
 
   const configured = findConfiguredServiceName_(raw);
   if (configured) return configured;
@@ -3941,6 +3958,14 @@ function openPdfModuleIfNeeded_() {
   }
 }
 
+function openMedicalCertificateModuleIfNeeded_() {
+  const container = document.getElementById("medicalCertificateContainer");
+  if (!container || !container.classList.contains("hidden")) return;
+  if (typeof toggleMedicalCertificateModule === "function") {
+    toggleMedicalCertificateModule(true);
+  }
+}
+
 function loadServicesDropdown() {
   const s = document.getElementById("reportTypeSelector");
   if (!s) return Promise.resolve();
@@ -3949,6 +3974,7 @@ function loadServicesDropdown() {
   s.innerHTML = `
       <option value="" selected disabled>-- Seleccione Procedimiento --</option>
       <option value="receta" style="font-weight:bold; color:#27ae60;">📝 RECETA MÉDICA</option>
+      <option value="${CERTIFICATE_ONLY_VALUE}" style="font-weight:bold; color:#8e44ad;">CERTIFICADO MEDICO</option>
       <option value="${EVERYTHING_VALUE}" style="font-weight:bold; color:#16a085;">TODO</option>
   `;
 
@@ -4024,6 +4050,10 @@ function toggleForm() {
   else if (isExternalPdfOnlyService_(v)) {
     document.getElementById("form-examen-pdf").classList.remove("hidden");
     openPdfModuleIfNeeded_();
+  }
+  else if (isCertificateOnlyService_(v)) {
+    document.getElementById("form-certificado-medico").classList.remove("hidden");
+    openMedicalCertificateModuleIfNeeded_();
   }
   else if (isLegacyGeneralService_(v))
     document.getElementById("form-general").classList.remove("hidden");
@@ -4117,7 +4147,7 @@ window.toggleForm = function() {
     const servicio = select.value;
     
     // 1. Ocultar todos los formularios primero
-    const forms = document.querySelectorAll(".report-form, #form-colposcopia, #form-general, #form-receta, #form-examen-pdf, #form-dinamico");
+    const forms = document.querySelectorAll(".report-form, #form-colposcopia, #form-general, #form-receta, #form-examen-pdf, #form-certificado-medico, #form-dinamico");
     forms.forEach(f => f.classList.add("hidden"));
 
     // 2. Mostrar el correcto según la selección
@@ -4132,6 +4162,10 @@ window.toggleForm = function() {
     else if (isExternalPdfOnlyService_(servicio)) {
         document.getElementById("form-examen-pdf").classList.remove("hidden");
         openPdfModuleIfNeeded_();
+    }
+    else if (isCertificateOnlyService_(servicio)) {
+      document.getElementById("form-certificado-medico").classList.remove("hidden");
+      openMedicalCertificateModuleIfNeeded_();
     }
     else if (isLegacyGeneralService_(servicio)) {
         document.getElementById("form-general").classList.remove("hidden");
@@ -4372,6 +4406,9 @@ function handleMasterSave(generatePdf, btn) {
     else if (isExternalPdfOnlyService_(servicio)) {
         saveExternalPdfOnly(generatePdf, btn);
     }
+    else if (isCertificateOnlyService_(servicio)) {
+      saveMedicalCertificateOnly(generatePdf, btn);
+    }
     else if (isLegacyGeneralService_(servicio)) {
         saveGeneral(generatePdf, btn, receta);
     } 
@@ -4452,6 +4489,25 @@ function saveExternalPdfOnly(generarPdf, btn) {
         return out;
     });
 }
+
+    function saveMedicalCertificateOnly(generarPdf, btn) {
+      saveCommon("CERTIFICADO MEDICO", generarPdf, btn, async () => {
+        const receta = getUniversalRecipeData();
+        const pdfFiles = await getExternalPdfPayloadForSave_();
+        const out = {
+          datos_json: {
+            modo_guardado: "CERTIFICADO_MEDICO"
+          },
+          certificado_medico: getMedicalCertificateDataForSave_(),
+          pdf_externos: pdfFiles
+        };
+        if (receta) {
+          out.medicamentos = receta.medicamentos;
+          out.observaciones_receta = receta.observaciones_receta;
+        }
+        return out;
+      });
+    }
 
 function saveEverything(generarPdf, btn) {
     saveCommon("TODO", generarPdf, btn, async () => {
