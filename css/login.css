@@ -63,22 +63,60 @@ html, body {
 .login-wrapper {
     min-height: 100vh;
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
-/* El lado visual está oculto en celular */
-.visual-side { display: none; }
+.visual-side {
+    display: flex;
+    justify-content: center;
+    padding: 2.5rem 1.5rem 0.75rem;
+}
+
+.visual-content {
+    width: 100%;
+    max-width: 520px;
+}
+
+.visual-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    text-align: center;
+}
+
+.welcome-logo {
+    width: min(48vw, 220px);
+    height: auto;
+    filter: drop-shadow(0 16px 28px rgba(54, 35, 93, 0.16));
+}
+
+.visual-copy h2 {
+    color: var(--color-primary-dark);
+    font-size: clamp(2.2rem, 7vw, 3.4rem);
+    line-height: 1.02;
+    margin-bottom: 0.9rem;
+}
+
+.visual-copy p {
+    color: rgba(44, 62, 80, 0.92);
+    font-size: 1.05rem;
+    line-height: 1.45;
+}
+
+.visual-copy p + p {
+    margin-top: 0.2rem;
+}
 
 /* ESTE ES EL CONTENEDOR PRINCIPAL EN EL MÓVIL */
 .form-side {
     flex: 1;
-    /* --- AQUI SE APLICA EL FONDO LILA TENUE EN EL CELULAR --- */
     background: var(--bg-mobile-tint);
-    
-    padding: 2rem 1.5rem;
+    padding: 1.25rem 1.5rem 2rem;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     animation: slideUpFade 0.8s ease-out backwards;
     animation-delay: 1.8s;
 }
@@ -95,6 +133,7 @@ html, body {
 
 /* --- AQUI CAMBIAS EL TAMAÑO DEL LOGO DEL FORMULARIO --- */
 .form-logo {
+    display: none;
     width: 200px; /* Antes era 120px, ahora es más grande */
     margin-bottom: 15px;
 }
@@ -185,7 +224,7 @@ html, body {
 
 /* Footer */
 .login-footer {
-    margin-top: auto;
+    margin-top: 2rem;
     text-align: center;
     padding-top: 30px;
 }
@@ -207,34 +246,75 @@ html, body {
    4. MODO ESCRITORIO (PC/TABLET)
    ========================================= */
 @media (min-width: 900px) {
+
+    html, body {
+        background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary-light) 100%);
+    }
     
     .login-wrapper {
+        width: min(1280px, calc(100vw - 48px));
+        margin: 0 auto;
         flex-direction: row;
-        /* Fondo degradado general en PC */
+        align-items: center;
+        justify-content: center;
+        gap: clamp(2rem, 4vw, 4.5rem);
         background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary-light) 100%);
     }
 
-    /* Muestra la parte izquierda decorativa */
     .visual-side {
         display: flex;
-        flex: 1.2;
+        flex: 1;
         justify-content: center;
         align-items: center;
-        color: white;
-        padding: 4rem;
+        padding: 4rem 1rem 4rem 2rem;
     }
 
-    .visual-content h2 { font-size: 3.5rem; line-height: 1.1; margin-bottom: 1rem; }
-    .visual-content p { font-size: 1.2rem; opacity: 0.9; }
+    .visual-content {
+        max-width: 620px;
+    }
 
-    /* Estilos de la TARJETA en PC */
+    .visual-brand {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(1.5rem, 2.5vw, 2.5rem);
+        text-align: left;
+    }
+
+    .welcome-logo {
+        width: clamp(150px, 16vw, 220px);
+        flex-shrink: 0;
+        filter: drop-shadow(0 18px 30px rgba(34, 20, 61, 0.18));
+    }
+
+    .visual-copy h2 {
+        color: #ffffff;
+        font-size: clamp(3.1rem, 4.4vw, 4.4rem);
+        margin-bottom: 1rem;
+    }
+
+    .visual-copy p {
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 1.25rem;
+    }
+
     .form-side {
-        flex: 0.8;
+        flex: 0 0 min(500px, 42vw);
         max-width: 550px;
-        margin: 4rem;
+        min-height: min(760px, calc(100vh - 64px));
+        margin: 2rem 0;
         border-radius: 24px;
-        /* --- EN PC EL FONDO DE LA TARJETA SE QUEDA BLANCO PARA RESALTAR --- */
-        background: #ffffff; 
+        background: #ffffff;
+        justify-content: center;
+        padding: 2.8rem 1.8rem;
         box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    }
+
+    .form-logo {
+        display: inline-block;
+    }
+
+    .login-footer {
+        margin-top: auto;
     }
 }

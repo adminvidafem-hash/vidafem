@@ -759,6 +759,63 @@ function isDiagnosisCanvasSliceMostlyBlank_(canvas, startY, sliceHeight) {
   }
 }
 
+function findDiagnosisBestSliceHeight_(canvas, startY, targetSliceHeight) {
+  if (!canvas || !targetSliceHeight) return targetSliceHeight;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return targetSliceHeight;
+
+  const totalHeight = canvas.height;
+  const targetEnd = Math.min(totalHeight, startY + targetSliceHeight);
+  if (targetEnd >= totalHeight) return totalHeight - startY;
+
+  const minSliceHeight = Math.max(220, Math.floor(targetSliceHeight * 0.58));
+  const minEnd = Math.min(totalHeight, startY + minSliceHeight);
+  const searchStart = Math.max(minEnd, targetEnd - 240);
+  const searchEnd = Math.min(totalHeight - 1, targetEnd + 140);
+  const searchHeight = searchEnd - searchStart + 1;
+  if (searchHeight <= 2) return targetSliceHeight;
+
+  try {
+    const image = ctx.getImageData(0, searchStart, canvas.width, searchHeight).data;
+    const sampleStepX = Math.max(6, Math.floor(canvas.width / 180));
+    const pixelsPerRow = Math.ceil(canvas.width / sampleStepX);
+
+    let bestY = targetEnd;
+    let bestDensity = Number.POSITIVE_INFINITY;
+
+    for (let row = 0; row < searchHeight; row += 1) {
+      let nonWhite = 0;
+      for (let x = 0; x < canvas.width; x += sampleStepX) {
+        const idx = ((row * canvas.width) + x) * 4;
+        const r = image[idx];
+        const g = image[idx + 1];
+        const b = image[idx + 2];
+        if (r < 245 || g < 245 || b < 245) nonWhite += 1;
+      }
+      const density = nonWhite / pixelsPerRow;
+      const y = searchStart + row;
+
+      if (density < bestDensity) {
+        bestDensity = density;
+        bestY = y;
+      }
+      if (density <= 0.002 && y >= targetEnd - 80) {
+        bestY = y;
+        bestDensity = density;
+        break;
+      }
+    }
+
+    if (bestDensity <= 0.16 && bestY > startY + 120) {
+      return bestY - startY;
+    }
+  } catch (e) {
+    return targetSliceHeight;
+  }
+
+  return targetSliceHeight;
+}
+
 function buildDiagnosisPdfDataUrlFromCanvas_(canvas, JsPdfCtor) {
   const doc = new JsPdfCtor({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -769,7 +826,11 @@ function buildDiagnosisPdfDataUrlFromCanvas_(canvas, JsPdfCtor) {
 
   while (offsetY < canvas.height) {
     const remaining = canvas.height - offsetY;
-    const sliceHeight = Math.min(pageHeightPx, remaining);
+    let sliceHeight = Math.min(pageHeightPx, remaining);
+    if (sliceHeight < remaining) {
+      sliceHeight = findDiagnosisBestSliceHeight_(canvas, offsetY, sliceHeight);
+      sliceHeight = Math.max(80, Math.min(sliceHeight, remaining));
+    }
     if (pageIndex > 0 && sliceHeight < 28 && isDiagnosisCanvasSliceMostlyBlank_(canvas, offsetY, sliceHeight)) {
       break;
     }
@@ -3014,7 +3075,7 @@ function loadReportForEdit(reportId) {
         });
       }
 
-      setClinicalReportDateInputValue_(data.fecha_reporte || rep.fecha);
+      setClinicalReportDateInputValue_(data.fecha_reporte || report.fecha);
 
       // Rellenar campos fijos (Legacy)
       if (isLegacyColposcopyService_(serviceValue)) {

@@ -1,0 +1,14 @@
+servicio,campo_nombre,campo_etiqueta,campo_tipo,opciones
+COLPOSCÓPIA,ano,ANO,select,"Normal, Anormal"
+COLPOSCÓPIA,evidencia_fotografica,Evidencia Fotográfica,imagenes,
+COLPOSCÓPIA,resultados,RESULTADOS:,select,"Positivo, Negativo, Sospecha de cáncer"
+COLPOSCÓPIA,vagina,VAGINA:,select,"Normal, Anormal"
+COLPOSCÓPIA,evaluacion_general,EVALUACIÓN GENERAL:,parrafo,
+COLPOSCÓPIA,vulva,VULVA,select,"Normal, Anormal"
+CONSULTA GENERAL,czxcxzcxzcxz,czxcxzcxzcxz,imagenes,
+CONSULTA GENERAL,zxczczczc,zxczczczc,parrafo,
+Ecografia Abdominal,resultado,Resultado,parrafo,
+Ecografia Abdominal,fotografias,Fotografias,imagenes,
+Ecografia Abdominal,recomendacion,Recomendación,texto,
+otra prueba,cabecera,cabecera,texto,
+otra prueba,imagenes,imagenes,imagenes,

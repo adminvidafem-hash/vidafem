@@ -709,6 +709,31 @@ function doPost(e) {
           }
         }
         response = deleteAppointment(data.id_cita);
+        if (response && response.success && String(data.requester) === String(pidDel)) {
+          const doctorInfoDelete = getDoctorContactForPatient_(ownerCitaDel) || { email: "", name: "", phone: "" };
+          const notifyDelete = sendWorkerAppointmentNotifications_({
+            event: "cancel",
+            id_cita: String(citaRowDel.id_cita || data.id_cita || "").trim(),
+            id_paciente: String(pidDel || "").trim(),
+            fecha: toIsoDate(citaRowDel.fecha),
+            hora: formatTime(citaRowDel.hora),
+            motivo: String(citaRowDel.motivo || "").trim(),
+            recomendaciones: String(citaRowDel.recomendaciones_serv || citaRowDel.recomendaciones || "").trim(),
+            patient_email: String(ownerCitaDel.correo || "").trim().toLowerCase(),
+            patient_nombre: String(ownerCitaDel.nombre_completo || "").trim(),
+            patient_telefono: String(ownerCitaDel.telefono || "").trim(),
+            doctor_email: String(doctorInfoDelete.email || "").trim().toLowerCase(),
+            doctor_nombre: String(doctorInfoDelete.name || ownerCitaDel.creado_por || "").trim(),
+            doctor_telefono: String(doctorInfoDelete.phone || "").trim()
+          });
+          if (notifyDelete && !notifyDelete.success) {
+            const notifyDeleteWarning = notifyDelete.message || "No se pudo enviar el correo de notificacion.";
+            response.warning = response.warning
+              ? (String(response.warning) + " | " + notifyDeleteWarning)
+              : notifyDeleteWarning;
+            response.message = "Cita eliminada correctamente. Advertencia: no se pudo enviar el correo de notificacion.";
+          }
+        }
         break;
 
       case "delete_bulk_citas":
@@ -756,7 +781,51 @@ function doPost(e) {
         if (response && response.success === false) { break; }
         if (bulkCitaInvalidPatient) { response = { success: false, message: 'Una o mas citas no pertenecen a este paciente.' }; break; }
         if (!bulkCitaMatches) { response = { success: false, message: 'No se encontraron citas para eliminar.' }; break; }
+        const bulkCitaNotifyRows = [];
+        if (String(data.requester) === String(bulkCitaPatientId)) {
+          for (let i = 1; i < bulkCitaData.length; i++) {
+            const rowId = String(bulkCitaData[i][idxBulkCitaId] || '').trim();
+            if (!bulkCitaMap[rowId]) continue;
+            bulkCitaNotifyRows.push({
+              id_cita: rowId,
+              fecha: bulkCitaData[i][2],
+              hora: bulkCitaData[i][3],
+              motivo: bulkCitaData[i][4],
+              recomendaciones_serv: bulkCitaData[i][8]
+            });
+          }
+        }
         response = deleteAppointmentsBulk(bulkCitaIds);
+        if (response && response.success && String(data.requester) === String(bulkCitaPatientId) && bulkCitaNotifyRows.length) {
+          const doctorInfoBulkDelete = getDoctorContactForPatient_(ownerBulkCita) || { email: "", name: "", phone: "" };
+          const bulkDeleteWarnings = [];
+          bulkCitaNotifyRows.forEach(function(row) {
+            const notifyBulkDelete = sendWorkerAppointmentNotifications_({
+              event: "cancel",
+              id_cita: String(row.id_cita || "").trim(),
+              id_paciente: String(bulkCitaPatientId || "").trim(),
+              fecha: toIsoDate(row.fecha),
+              hora: formatTime(row.hora),
+              motivo: String(row.motivo || "").trim(),
+              recomendaciones: String(row.recomendaciones_serv || "").trim(),
+              patient_email: String(ownerBulkCita.correo || "").trim().toLowerCase(),
+              patient_nombre: String(ownerBulkCita.nombre_completo || "").trim(),
+              patient_telefono: String(ownerBulkCita.telefono || "").trim(),
+              doctor_email: String(doctorInfoBulkDelete.email || "").trim().toLowerCase(),
+              doctor_nombre: String(doctorInfoBulkDelete.name || ownerBulkCita.creado_por || "").trim(),
+              doctor_telefono: String(doctorInfoBulkDelete.phone || "").trim()
+            });
+            if (notifyBulkDelete && !notifyBulkDelete.success) {
+              bulkDeleteWarnings.push(String(notifyBulkDelete.message || "No se pudo enviar el correo de notificacion."));
+            }
+          });
+          if (bulkDeleteWarnings.length) {
+            response.warning = response.warning
+              ? (String(response.warning) + " | " + bulkDeleteWarnings.join(" | "))
+              : bulkDeleteWarnings.join(" | ");
+            response.message = "Se eliminaron " + response.deleted_count + " cita(s). Advertencia: no se pudo enviar el correo de notificacion.";
+          }
+        }
         break;
 
       case "get_taken_slots":

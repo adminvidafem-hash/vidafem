@@ -1719,6 +1719,60 @@ function sendRescheduleEmailToPatient_(email, patientName, newDate, newTime) {
   return true;
 }
 
+function sendAppointmentCancellationEmailToPatient_(email, patientName, fecha, hora, motivo) {
+  const to = String(email || "").trim();
+  if (!to || to.indexOf("@") === -1) return false;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
+      <div style="background-color: #c0392b; padding: 20px; text-align: center; color: white;">
+        <h2>Cita Cancelada</h2>
+      </div>
+      <div style="padding: 20px;">
+        <p>Hola <strong>${String(patientName || "Paciente").trim()}</strong>,</p>
+        <p>Tu cita fue cancelada correctamente.</p>
+        <div style="background-color: #fdecea; padding: 15px; border-left: 5px solid #c0392b; margin: 20px 0;">
+          <p><strong>Fecha:</strong> ${String(fecha || "").trim()}</p>
+          <p><strong>Hora:</strong> ${String(hora || "").trim()}</p>
+          <p><strong>Motivo:</strong> ${String(motivo || "Cita cancelada").trim()}</p>
+        </div>
+        <p>Si deseas una nueva cita, puedes volver a agendar cuando lo necesites.</p>
+      </div>
+    </div>
+  `;
+  MailApp.sendEmail({ to: to, subject: "Cancelación de Cita - VIDAFEM", htmlBody: html });
+  return true;
+}
+
+function sendAppointmentCancellationEmailToDoctor_(doctorEmail, doctorName, patientName, patientPhone, dataObj, idCita) {
+  const to = String(doctorEmail || "").trim();
+  if (!to || to.indexOf("@") === -1) return false;
+
+  const info = dataObj || {};
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
+      <div style="background-color: #c0392b; padding: 20px; text-align: center;">
+        <h2 style="color: white; margin: 0;">VIDAFEM</h2>
+        <p style="color: #f7d6d2; margin: 5px 0;">Cita Cancelada</p>
+      </div>
+      <div style="padding: 20px;">
+        <h3>Hola, ${doctorName || "Doctor/a"}</h3>
+        <p>La siguiente cita fue cancelada por la paciente:</p>
+        <p>Paciente: <strong>${patientName || "Sin nombre"}</strong></p>
+        <p>Teléfono: <strong>${patientPhone || "Sin teléfono"}</strong></p>
+        <div style="background-color: #fdf2f2; padding: 15px; border-left: 5px solid #c0392b; margin: 20px 0;">
+          <p><strong>Fecha:</strong> ${String(info.fecha || "").trim()}</p>
+          <p><strong>Hora:</strong> ${String(info.hora || "").trim()}</p>
+          <p><strong>Motivo:</strong> ${String(info.motivo || "Cita cancelada").trim()}</p>
+        </div>
+        <small>ID Cita: ${idCita}</small>
+      </div>
+    </div>
+  `;
+  MailApp.sendEmail({ to: to, subject: "Cita Cancelada - VIDAFEM", htmlBody: html });
+  return true;
+}
+
 function buildWhatsappLink_(phone, fecha, hora) {
   const num = normalizePhone_(phone);
   if (!num) return "";
@@ -1866,6 +1920,19 @@ function sendWorkerAppointmentNotifications_(payload) {
           { fecha: fecha, hora: hora, motivo: motivo || "REAGENDADO" },
           appointmentId,
           true
+        );
+        sentDoctor = true;
+      }
+    } else if (eventType === "cancel" || eventType === "delete") {
+      sentPatient = sendAppointmentCancellationEmailToPatient_(patientEmail, patientName, fecha, hora, motivo) || false;
+      if (doctorInfo.email && String(doctorInfo.email).indexOf("@") !== -1) {
+        sendAppointmentCancellationEmailToDoctor_(
+          doctorInfo.email,
+          doctorInfo.name,
+          patientName,
+          patientPhone,
+          { fecha: fecha, hora: hora, motivo: motivo || "Cita cancelada" },
+          appointmentId
         );
         sentDoctor = true;
       }

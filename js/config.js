@@ -1,7 +1,7 @@
 // js/config.js
 // Configuracion global de conexion
 
-const PROD_API_URL = "https://script.google.com/macros/s/AKfycbxqXxfIonXV7JiiisTjYR__wuz70qc81gZ6qsSn5ZExtwuPxTRoN3X8r-uIw0nHrlvIfA/exec";
+const PROD_API_URL = "https://script.google.com/macros/s/AKfycbxnfbCeCIQa8BWLfJwh6J20SNSksLEcHYdthf9mEfyev8tLF5wYg4uo7BsaMA5R4-NZUw/exec";
 const TEST_API_URL = "https://script.google.com/macros/s/AKfycbxnfbCeCIQa8BWLfJwh6J20SNSksLEcHYdthf9mEfyev8tLF5wYg4uo7BsaMA5R4-NZUw/exec";
 const VF_ENV_STORAGE_KEY = "vidafem_runtime_env";
 const VF_BACKEND_STORAGE_KEY = "vidafem_backend_runtime";
