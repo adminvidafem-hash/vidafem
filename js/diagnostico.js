@@ -3673,7 +3673,16 @@ function loadReportForEdit(reportId) {
       if (!report) return alert("Reporte no encontrado");
 
       let data = {};
-      try { data = JSON.parse(report.datos_json); } catch (e) { console.error(e); }
+      try {
+        if (report && typeof report.datos_json === "string") {
+          data = JSON.parse(report.datos_json || "{}");
+        } else if (report && report.datos_json && typeof report.datos_json === "object") {
+          data = Object.assign({}, report.datos_json);
+        }
+      } catch (e) {
+        console.error(e);
+        data = {};
+      }
       currentMedicalCertificate = null;
       setCurrentExternalPdfItems_(getStoredExternalPdfItemsFromPayload_(data));
       setGeneratedDocsState_({
@@ -3685,7 +3694,7 @@ function loadReportForEdit(reportId) {
 
       // 1. Configurar Servicio
       const selector = document.getElementById("reportTypeSelector");
-      let serviceValue = resolveReportServiceValue_(data.tipo_examen);
+      let serviceValue = resolveReportServiceValue_(data.tipo_examen || report.tipo_examen);
       if (isLegacyColposcopyService_(serviceValue)) {
         ensureSelectorOption_(selector, serviceValue, "COLPOSCOPIA", { color: "#e67e22", fontWeight: "bold" });
       } else if (isExternalPdfOnlyService_(serviceValue)) {
