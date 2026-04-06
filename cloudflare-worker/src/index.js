@@ -5399,6 +5399,15 @@ function buildDiagnosisStoragePayload_(payload, options) {
     out.datos_json = normalizeDiagnosisDynamicPayload_(oldPayload.datos_json);
   }
 
+  if (Object.prototype.hasOwnProperty.call(data, "certificado_medico")) {
+    const cert = normalizeDiagnosisMedicalCertificateForStorage_(data.certificado_medico);
+    if (cert) out.certificado_medico = cert;
+    else delete out.certificado_medico;
+  } else if (oldPayload.certificado_medico && typeof oldPayload.certificado_medico === "object") {
+    const oldCert = normalizeDiagnosisMedicalCertificateForStorage_(oldPayload.certificado_medico);
+    if (oldCert) out.certificado_medico = oldCert;
+  }
+
   [
     "motivo",
     "evaluacion",
@@ -5510,6 +5519,38 @@ function normalizeDiagnosisDynamicPayload_(value) {
     out[cleanKey] = rawValue === null ? "" : rawValue;
   });
   return out;
+}
+
+function normalizeDiagnosisMedicalCertificateForStorage_(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const src = value;
+  const out = {
+    ciudad: normalizeText_(src.ciudad),
+    nombre_paciente: normalizeText_(src.nombre_paciente),
+    cedula: normalizeText_(src.cedula),
+    cuadro_clinico: normalizeText_(src.cuadro_clinico),
+    diagnostico: normalizeText_(src.diagnostico),
+    lugar_trabajo: normalizeText_(src.lugar_trabajo),
+    ocupacion: normalizeText_(src.ocupacion),
+    lugar_atencion: normalizeText_(src.lugar_atencion),
+    establecimiento: normalizeText_(src.establecimiento),
+    reposo_sugerido: normalizeUpper_(src.reposo_sugerido) === "SI" ? "SI" : "NO",
+    reposo_inicio: normalizeIsoDateValue_(src.reposo_inicio),
+    reposo_fin: normalizeIsoDateValue_(src.reposo_fin)
+  };
+  const hasContent = !!(
+    out.nombre_paciente
+    || out.cedula
+    || out.cuadro_clinico
+    || out.diagnostico
+    || out.lugar_trabajo
+    || out.ocupacion
+    || out.lugar_atencion
+    || out.establecimiento
+    || out.reposo_inicio
+    || out.reposo_fin
+  );
+  return hasContent ? out : null;
 }
 
 function normalizeDiagnosisMedicamentosForStorage_(items) {
