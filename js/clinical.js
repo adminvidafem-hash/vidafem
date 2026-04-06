@@ -1463,7 +1463,7 @@ function loadDiagnosisHistory() {
                         <div>
                             <h4 style="margin:0; color:${cardAccentColor}; text-transform:uppercase;">${escapeHtmlClinical_(reportTitle)}</h4>
                             <small style="color:#777;">
-                                <i class="far fa-calendar-alt"></i> ${formatClinicalReportDate_(extraData.fecha_reporte || rep.fecha)} 
+                                <i class="far fa-calendar-alt"></i> ${formatClinicalReportDate_(extraData.fecha_reporte || rep.fecha_reporte || rep.fecha)} 
                             </small>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px;">

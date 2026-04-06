@@ -540,46 +540,48 @@ function buildDiagnosisTemplateFieldsHtml_(entries) {
   if (!list.length) {
     return "<div style=\"font-size:10pt;color:#666;\">Sin campos clinicos para mostrar.</div>";
   }
-  return list.map((entry) => {
-    const type = String((entry && entry.type) || "").trim().toLowerCase();
-    const label = escapeHtmlDiagnosis_(String((entry && entry.label) || "").trim());
-    if (!label) return "";
+  return list.map((entry) => renderDiagnosisTemplateEntryHtml_(entry)).filter(Boolean).join("");
+}
 
-    if (type === "select") {
-      const selectedText = diagnosisValueToHtmlLines_(entry && entry.value);
-      if (!selectedText) return "";
-      return ""
-        + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
-        + "<div style=\"display:flex;align-items:flex-start;gap:2mm;flex-wrap:wrap;font-size:10pt;line-height:1.45;color:#222;\">"
-        + "<span style=\"font-weight:700;color:#36235d;\">" + label + ":</span>"
-        + "<span>" + selectedText + "</span>"
-        + "</div>"
-        + "</section>";
-    }
+function renderDiagnosisTemplateEntryHtml_(entry) {
+  const type = String((entry && entry.type) || "").trim().toLowerCase();
+  const label = escapeHtmlDiagnosis_(String((entry && entry.label) || "").trim());
+  if (!label) return "";
 
-    if (type === "casillas_opciones") {
-      const options = Array.isArray(entry && entry.options) ? entry.options : [];
-      const selected = Array.isArray(entry && entry.selected) ? entry.selected : diagnosisNormalizeOptionValues_(entry && entry.value);
-      const lines = diagnosisBuildCheckboxLines_(options, selected);
-      if (!lines.length) return "";
-      const linesHtml = lines
-        .map((line) => "<div style=\"margin:0 0 1mm 0;\">" + escapeHtmlDiagnosis_(line) + "</div>")
-        .join("");
-      return ""
-        + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
-        + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">" + label + "</div>"
-        + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + linesHtml + "</div>"
-        + "</section>";
-    }
+  if (type === "select") {
+    const selectedText = diagnosisValueToHtmlLines_(entry && entry.value);
+    if (!selectedText) return "";
+    return ""
+      + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
+      + "<div style=\"display:flex;align-items:flex-start;gap:2mm;flex-wrap:wrap;font-size:10pt;line-height:1.45;color:#222;\">"
+      + "<span style=\"font-weight:700;color:#36235d;\">" + label + ":</span>"
+      + "<span>" + selectedText + "</span>"
+      + "</div>"
+      + "</section>";
+  }
 
-    const value = diagnosisValueToHtmlLines_(entry && entry.value);
-    if (!value) return "";
+  if (type === "casillas_opciones") {
+    const options = Array.isArray(entry && entry.options) ? entry.options : [];
+    const selected = Array.isArray(entry && entry.selected) ? entry.selected : diagnosisNormalizeOptionValues_(entry && entry.value);
+    const lines = diagnosisBuildCheckboxLines_(options, selected);
+    if (!lines.length) return "";
+    const linesHtml = lines
+      .map((line) => "<div style=\"margin:0 0 1mm 0;\">" + escapeHtmlDiagnosis_(line) + "</div>")
+      .join("");
     return ""
       + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
       + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">" + label + "</div>"
-      + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + value + "</div>"
+      + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + linesHtml + "</div>"
       + "</section>";
-  }).filter(Boolean).join("");
+  }
+
+  const value = diagnosisValueToHtmlLines_(entry && entry.value);
+  if (!value) return "";
+  return ""
+    + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
+    + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">" + label + "</div>"
+    + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + value + "</div>"
+    + "</section>";
 }
 
 function buildDiagnosisTemplateImagesHtml_(images) {
@@ -590,25 +592,25 @@ function buildDiagnosisTemplateImagesHtml_(images) {
     const src = escapeHtmlDiagnosis_(String((item && item.dataUrl) || "").trim());
     const size = String((item && item.size) || "").trim().toLowerCase();
     if (!src) return "";
-    const frameHeight = size === "large"
-      ? "112mm"
+    const frameStyle = size === "large"
+      ? "width:100%;height:112mm;"
       : size === "medium"
-        ? "88mm"
-        : "70mm";
+        ? "width:48%;height:80mm;"
+        : "width:31%;height:53mm;";
     return ""
-      + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
-      + "<div style=\"font-size:9pt;font-weight:700;color:#36235d;margin:0 0 1.5mm 0;\">" + title + "</div>"
-      + "<div style=\"width:100%;height:" + frameHeight + ";border:1px solid #ddd;border-radius:2mm;background:#fff;overflow:hidden;\">"
-      + "<img src=\"" + src + "\" alt=\"" + title + "\" style=\"width:100%;height:100%;display:block;object-fit:contain;background:#fff;\">"
-      + "</div>"
-      + "</section>";
+      + "<figure style=\"margin:0 0 4mm 0; page-break-inside:avoid; " + frameStyle + " display:inline-flex; flex-direction:column;\">"
+      + "<figcaption style=\"font-size:9pt;font-weight:700;color:#36235d;margin:0 0 1.5mm 0;\">" + title + "</figcaption>"
+      + "<img src=\"" + src + "\" alt=\"" + title + "\" style=\"width:100%;height:100%;display:block;border:1px solid #ddd;border-radius:2mm;object-fit:contain;background:#fff;\">"
+      + "</figure>";
   }).filter(Boolean).join("");
   if (!blocks) return "";
   return ""
-    + "<section style=\"margin-top:2mm; page-break-inside:avoid;\">"
+    + "<section style=\"margin-top:2mm;\">"
     + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin:0 0 2mm 0;\">Imagenes clinicas</div>"
-    + "</section>"
-    + blocks;
+    + "<div style=\"display:flex;flex-wrap:wrap;gap:2.4mm;align-items:flex-start;\">"
+    + blocks
+    + "</div>"
+    + "</section>";
 }
 
 function buildDiagnosisTemplatePatientHeaderHtml_(payload, generatedAtText) {
@@ -703,8 +705,7 @@ function buildDiagnosisTemplateMainHtml_(payload, fieldEntries, resolvedImages) 
   const reportTitle = getDiagnosisReportTitle_(serviceName);
   const generatedAt = formatDiagnosisDateOnlyText_(getClinicalReportDateForDisplay_(data));
   const headerHtml = buildDiagnosisTemplatePatientHeaderHtml_(data, generatedAt);
-  const fieldsHtml = buildDiagnosisTemplateFieldsHtml_(fieldEntries);
-  const imagesHtml = buildDiagnosisTemplateImagesHtml_(resolvedImages);
+  const bodyHtml = buildDiagnosisTemplateBodyHtml_(data, fieldEntries, resolvedImages);
   const signatureHtml = buildDiagnosisTemplateSignatureHtml_(data);
 
   return ""
@@ -713,10 +714,66 @@ function buildDiagnosisTemplateMainHtml_(payload, fieldEntries, resolvedImages) 
     + "<h1 style=\"font-size:15pt;letter-spacing:0.2px;color:#36235d;margin:0 0 4mm 0;text-align:center;\">"
     + escapeHtmlDiagnosis_(reportTitle)
     + "</h1>"
-    + fieldsHtml
-    + imagesHtml
+    + bodyHtml
     + signatureHtml
     + "</article>";
+}
+
+function buildDiagnosisTemplateBodyHtml_(payload, fieldEntries, resolvedImages) {
+  const data = payload || {};
+  const service = String(data.tipo_examen || "").trim();
+  const entries = Array.isArray(fieldEntries) ? fieldEntries : [];
+  const images = Array.isArray(resolvedImages) ? resolvedImages : [];
+  const config = CONFIG_CAMPOS && Array.isArray(CONFIG_CAMPOS[service]) ? CONFIG_CAMPOS[service] : [];
+
+  if (!config.length) {
+    return buildDiagnosisTemplateFieldsHtml_(entries) + buildDiagnosisTemplateImagesHtml_(images);
+  }
+
+  const renderedByKey = new Set();
+  const out = [];
+  let insertedImages = false;
+
+  config.forEach((item) => {
+    const type = String((item && item.tipo) || "").trim().toLowerCase();
+    const key = String((item && item.nombre) || "").trim();
+
+    if (type === "titulo") {
+      const title = escapeHtmlDiagnosis_(String((item && item.etiqueta) || "").trim());
+      if (!title) return;
+      out.push("<section style=\"margin:2mm 0 4mm 0; page-break-inside:avoid;\"><h3 style=\"font-size:11pt;color:#36235d;margin:0;padding-bottom:1.2mm;border-bottom:1px solid #e1dfef;\">" + title + "</h3></section>");
+      return;
+    }
+
+    if (type === "imagenes") {
+      if (!insertedImages && images.length) {
+        out.push(buildDiagnosisTemplateImagesHtml_(images));
+        insertedImages = true;
+      }
+      return;
+    }
+
+    if (!key) return;
+    const entry = entries.find((e) => String((e && e.key) || "").trim() === key);
+    if (!entry) return;
+    const block = renderDiagnosisTemplateEntryHtml_(entry);
+    if (!block) return;
+    renderedByKey.add(key);
+    out.push(block);
+  });
+
+  entries.forEach((entry) => {
+    const key = String((entry && entry.key) || "").trim();
+    if (key && renderedByKey.has(key)) return;
+    const block = renderDiagnosisTemplateEntryHtml_(entry);
+    if (block) out.push(block);
+  });
+
+  if (!insertedImages && images.length) {
+    out.push(buildDiagnosisTemplateImagesHtml_(images));
+  }
+
+  return out.join("");
 }
 
 function buildDiagnosisTemplateRecipeRowsHtml_(meds) {
@@ -1095,6 +1152,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
         const lines = diagnosisBuildCheckboxLines_(options, selected);
         if (!lines.length) return;
         entries.push({
+          key: key,
           label: String((item && item.etiqueta) || key).trim(),
           value: lines.join("\n"),
           type: "casillas_opciones",
@@ -1108,6 +1166,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
         const selectedValue = diagnosisPdfValueToText_(dynamicData[key]);
         if (!selectedValue) return;
         entries.push({
+          key: key,
           label: String((item && item.etiqueta) || key).trim(),
           value: selectedValue,
           type: "select"
@@ -1118,6 +1177,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
       const value = diagnosisPdfValueToText_(dynamicData[key]);
       if (!value) return;
       entries.push({
+        key: key,
         label: String((item && item.etiqueta) || key).trim(),
         value: value,
         type: type
@@ -1129,6 +1189,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
       const value = diagnosisPdfValueToText_(dynamicData[key]);
       if (!value) return;
       entries.push({
+        key: key,
         label: diagnosisPdfLabelFromKey_(key, service),
         value: value
       });
@@ -1150,6 +1211,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
     const value = diagnosisPdfValueToText_(data[key]);
     if (!value) return;
     entries.push({
+      key: key,
       label: diagnosisPdfLabelFromKey_(key, service),
       value: value
     });
