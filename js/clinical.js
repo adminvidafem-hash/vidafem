@@ -254,6 +254,25 @@ function verifyDoctorAppointmentRescheduledAfterFetchError_(requester, expected)
     .catch(() => null);
 }
 
+function formatClinicalReportDate_(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "-";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const parts = raw.split("-");
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+        const dateOnly = raw.split("T")[0];
+        const parts = dateOnly.split("-");
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString("es-EC");
+    }
+    return raw;
+}
+
 function openDoctorAppointmentSuccessModal_(result, data, fechaVal, horaVal, formEl) {
     window.closeModal('modalAppointment');
     if (formEl && typeof formEl.reset === "function") {
@@ -1444,7 +1463,7 @@ function loadDiagnosisHistory() {
                         <div>
                             <h4 style="margin:0; color:${cardAccentColor}; text-transform:uppercase;">${escapeHtmlClinical_(reportTitle)}</h4>
                             <small style="color:#777;">
-                                <i class="far fa-calendar-alt"></i> ${new Date(rep.fecha).toLocaleString()} 
+                                <i class="far fa-calendar-alt"></i> ${formatClinicalReportDate_(extraData.fecha_reporte || rep.fecha)} 
                             </small>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px;">

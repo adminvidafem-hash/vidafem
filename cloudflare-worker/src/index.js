@@ -1471,7 +1471,18 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
   const normalizedData = normalizeDiagnosisSavePayloadForMode_(data, existingPayload);
 
   const idReporte = reportId || ("REP-" + Date.now());
-  const savedAt = new Date().toISOString();
+  const requestedReportDate = normalizeIsoDateValue_(
+    data.fecha_reporte
+    || data.fecha
+    || normalizedData.fecha_reporte
+    || normalizedData.fecha
+    || existingPayload.fecha_reporte
+    || (existing && existing.fecha)
+  );
+  const hasCustomReportDate = !!requestedReportDate;
+  const savedAt = hasCustomReportDate
+    ? (requestedReportDate + "T12:00:00.000Z")
+    : normalizeIsoDateTimeValue_((existing && existing.fecha) || new Date().toISOString());
   const doctorUser = normalizeLower_(patientAccess.patient.creado_por || validation.session.user_id);
   const prepared = await prepareDiagnosisPersistenceWorker_(env, normalizedData, {
     patientId: patientAccess.patient.id_paciente,
@@ -1490,6 +1501,11 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
     doctor_usuario: doctorUser,
     oldPayload: existingPayload
   });
+  if (hasCustomReportDate) {
+    storedPayload.fecha_reporte = requestedReportDate;
+  } else if (normalizeIsoDateValue_(existingPayload.fecha_reporte)) {
+    storedPayload.fecha_reporte = normalizeIsoDateValue_(existingPayload.fecha_reporte);
+  }
   if (Object.prototype.hasOwnProperty.call(preparedData, "imagenes")) {
     storedPayload.imagenes = normalizeDiagnosisImagesForStorage_(preparedData.imagenes);
   }
@@ -2419,7 +2435,39 @@ async function handleDeleteCita_(body, env) {
     return errorResult_(500, deleteRes.message || "No se pudo eliminar la cita.");
   }
 
-  return { status: 200, payload: { success: true, message: "Cita eliminada correctamente" } };
+  let notifyWarning = "";
+  if (validationSessionIsPaciente_(validation.session)) {
+    const doctor = await loadUserByRoleAndId_(env, "admin", access.patient.creado_por);
+    const notifyRes = await sendAppointmentNotificationsByBridge_(env, {
+      event: "cancel",
+      id_cita: appointmentId,
+      id_paciente: normalizeText_(access.patient.id_paciente),
+      fecha: normalizeIsoDateValue_(access.appointment && access.appointment.fecha),
+      hora: normalizeTimeText_(access.appointment && access.appointment.hora),
+      motivo: normalizeText_(access.appointment && access.appointment.motivo),
+      recomendaciones: normalizeText_(access.appointment && access.appointment.recomendaciones_serv),
+      patient_email: normalizeLower_(access.patient.correo),
+      patient_nombre: normalizeText_(access.patient.nombre_completo),
+      patient_telefono: normalizeText_(access.patient.telefono),
+      doctor_email: normalizeLower_(doctor && (doctor.correo_notificaciones || doctor.correo)),
+      doctor_nombre: normalizeText_(doctor && (doctor.nombre_doctor || doctor.nombre || access.patient.creado_por)),
+      doctor_telefono: normalizeText_(doctor && doctor.telefono)
+    });
+    if (!notifyRes.success) {
+      notifyWarning = notifyRes.message || "La cita se elimino, pero no se pudo enviar el correo de notificacion.";
+    }
+  }
+
+  return {
+    status: 200,
+    payload: {
+      success: true,
+      message: notifyWarning
+        ? ("Cita eliminada correctamente. Advertencia: " + notifyWarning)
+        : "Cita eliminada correctamente",
+      warning: notifyWarning
+    }
+  };
 }
 
 async function handleDeleteBulkCitas_(body, env) {
@@ -2439,7 +2487,7 @@ async function handleDeleteBulkCitas_(body, env) {
   }
 
   const lookupRes = await supabaseRest_(env, "get", "citas", {
-    select: "id_cita,id_paciente,creado_por,estado",
+    select: "id_cita,id_paciente,creado_por,estado,fecha,hora,motivo,recomendaciones_serv",
     filters: [
       ["id_paciente", eq_(access.patient.id_paciente)],
       ["id_cita", inList_(ids)]
@@ -2501,15 +2549,49 @@ async function handleDeleteBulkCitas_(body, env) {
     return errorResult_(500, deleteRes.message || "No se pudieron eliminar las citas seleccionadas.");
   }
 
+  let notifyWarning = "";
+  if (validationSessionIsPaciente_(access.session)) {
+    const doctor = await loadUserByRoleAndId_(env, "admin", access.patient.creado_por);
+    const notifyErrors = [];
+    for (const row of matches) {
+      const notifyRes = await sendAppointmentNotificationsByBridge_(env, {
+        event: "cancel",
+        id_cita: normalizeText_(row && row.id_cita),
+        id_paciente: normalizeText_(access.patient.id_paciente),
+        fecha: normalizeIsoDateValue_(row && row.fecha),
+        hora: normalizeTimeText_(row && row.hora),
+        motivo: normalizeText_(row && row.motivo),
+        recomendaciones: normalizeText_(row && row.recomendaciones_serv),
+        patient_email: normalizeLower_(access.patient.correo),
+        patient_nombre: normalizeText_(access.patient.nombre_completo),
+        patient_telefono: normalizeText_(access.patient.telefono),
+        doctor_email: normalizeLower_(doctor && (doctor.correo_notificaciones || doctor.correo)),
+        doctor_nombre: normalizeText_(doctor && (doctor.nombre_doctor || doctor.nombre || access.patient.creado_por)),
+        doctor_telefono: normalizeText_(doctor && doctor.telefono)
+      });
+      if (!notifyRes.success) {
+        notifyErrors.push(notifyRes.message || "No se pudo enviar el correo de notificacion.");
+      }
+    }
+    if (notifyErrors.length) {
+      notifyWarning = notifyErrors[0];
+    }
+  }
+
   return {
     status: 200,
     payload: {
       success: true,
       deleted_count: matchedIds.length,
       missing_ids: [],
-      message: matchedIds.length === 1
-        ? "Se elimino 1 cita."
-        : ("Se eliminaron " + matchedIds.length + " cita(s).")
+      message: notifyWarning
+        ? ((matchedIds.length === 1
+            ? "Se elimino 1 cita."
+            : ("Se eliminaron " + matchedIds.length + " cita(s).")) + " Advertencia: " + notifyWarning)
+        : (matchedIds.length === 1
+            ? "Se elimino 1 cita."
+            : ("Se eliminaron " + matchedIds.length + " cita(s).")),
+      warning: notifyWarning
     }
   };
 }
@@ -3761,6 +3843,13 @@ async function sendAppointmentNotificationsByBridge_(env, payload) {
       }
 
       const msg = normalizeText_(parsed.message) || "No se pudieron enviar las notificaciones de correo.";
+      if (msg.toLowerCase().indexOf("acción api no reconocida: worker_send_cita_notifications") === 0
+        || msg.toLowerCase().indexOf("accion api no reconocida: worker_send_cita_notifications") === 0) {
+        return {
+          success: false,
+          message: "La cita se guardo, pero el modulo de correos del Apps Script publicado esta desactualizado."
+        };
+      }
       lastError = msg;
       const msgLower = msg.toLowerCase();
       if (msgLower.indexOf("acceso denegado") === 0 || msgLower.indexOf("bridge token") > -1) {

@@ -347,6 +347,53 @@ function shouldIncludeVirtualSignature_() {
   return checkbox ? !!checkbox.checked : true;
 }
 
+function getClinicalReportDateInputValue_() {
+  const input = document.getElementById("reportDateInput") || document.getElementById("fecha");
+  return input ? String(input.value || "").trim() : "";
+}
+
+function setClinicalReportDateInputValue_(value) {
+  const input = document.getElementById("reportDateInput") || document.getElementById("fecha");
+  if (!input) return;
+  const raw = String(value || "").trim();
+  if (!raw) {
+    input.value = "";
+    return;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    input.value = raw;
+    return;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    input.value = raw.split("T")[0];
+    return;
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    input.value = parsed.toISOString().split("T")[0];
+  }
+}
+
+function getClinicalReportDateForDisplay_(payload) {
+  const data = payload || {};
+  const raw = String(
+    getClinicalReportDateInputValue_()
+    || data.fecha_reporte
+    || data.fecha
+    || ""
+  ).trim();
+  if (!raw) return new Date();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return new Date(raw + "T12:00:00");
+  }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const parsedIso = new Date(raw);
+    if (!Number.isNaN(parsedIso.getTime())) return parsedIso;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 function getDiagnosisJsPdf_() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     throw new Error("No se pudo cargar la libreria PDF.");
@@ -1081,7 +1128,7 @@ async function buildDiagnosisReportPdfDataUrl_(payload) {
     || "PACIENTE"
   ).trim();
   const doctorName = getDiagnosisDoctorDisplayName_();
-  const generatedAt = new Date();
+  const generatedAt = getClinicalReportDateForDisplay_(data);
   let y = 18;
 
   doc.setFont("helvetica", "bold");
@@ -1101,7 +1148,7 @@ async function buildDiagnosisReportPdfDataUrl_(payload) {
     doc.text("Profesional: " + doctorName, 14, y);
     y += 6;
   }
-  doc.text("Fecha: " + generatedAt.toLocaleString("es-EC"), 14, y);
+  doc.text("Fecha: " + (Number.isNaN(generatedAt.getTime()) ? new Date().toLocaleDateString("es-EC") : generatedAt.toLocaleDateString("es-EC")), 14, y);
   y += 8;
 
   fieldEntries.forEach((entry) => {
@@ -1161,7 +1208,8 @@ async function buildDiagnosisRecipePdfDataUrl_(payload) {
     doc.text("Profesional: " + doctorName, 14, y);
     y += 6;
   }
-  doc.text("Fecha: " + new Date().toLocaleString("es-EC"), 14, y);
+  const recipeDate = getClinicalReportDateForDisplay_(data);
+  doc.text("Fecha: " + (Number.isNaN(recipeDate.getTime()) ? new Date().toLocaleDateString("es-EC") : recipeDate.toLocaleDateString("es-EC")), 14, y);
   y += 10;
 
   meds.forEach((item, index) => {
@@ -1284,7 +1332,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const rId = urlParams.get("reportId") || urlParams.get("reporte"); // <--- AHORA LEEMOS EL REPORTE
 
   // Poner fecha de hoy por defecto
-  const fechaInput = document.getElementById("fecha");
+  const fechaInput = document.getElementById("reportDateInput") || document.getElementById("fecha");
   if (fechaInput) {
       const today = new Date();
       fechaInput.value = today.toISOString().split('T')[0];
@@ -2966,6 +3014,8 @@ function loadReportForEdit(reportId) {
         });
       }
 
+      setClinicalReportDateInputValue_(data.fecha_reporte || rep.fecha);
+
       // Rellenar campos fijos (Legacy)
       if (isLegacyColposcopyService_(serviceValue)) {
         setVal("colpo_evaluacion", data.evaluacion);
@@ -3797,6 +3847,7 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
             id_paciente: currentPatientId,
             nombre_paciente: document.getElementById("patientNameDisplay").value,
             tipo_examen: servicio,
+          fecha_reporte: getClinicalReportDateInputValue_(),
             generar_pdf: generatePdf,
             incluir_firma_virtual: shouldIncludeVirtualSignature_(),
             datos_json: datosDinamicos, 
