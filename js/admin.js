@@ -2624,13 +2624,14 @@ window.addBuilderFieldRow = function(nombreVal="", etiquetaVal="", tipoVal="text
                         <option value="parrafo" ${tipoVal==='parrafo' ? 'selected' : ''}>Parrafo</option>
                         <option value="numero" ${tipoVal==='numero' ? 'selected' : ''}>Número</option>
                         <option value="select" ${tipoVal==='select' ? 'selected' : ''}>Lista Desplegable</option>
+                      <option value="casillas_opciones" ${tipoVal==='casillas_opciones' ? 'selected' : ''}>Casillas opciones</option>
                         <option value="imagenes" ${tipoVal==='imagenes' ? 'selected' : ''}>Galería de fotos</option>
                         <option value="titulo" ${tipoVal==='titulo' ? 'selected' : ''}>-- Título de sección --</option>
                     </select>
                 </div>
             </div>
 
-            <div class="options-config ${tipoVal==='select' ? 'active' : ''}">
+                <div class="options-config ${(tipoVal==='select' || tipoVal==='casillas_opciones') ? 'active' : ''}">
                 <input type="text" class="field-options doc-input" 
                        placeholder="Opciones separadas por coma (Ej: Positivo, Negativo, Indeterminado)" 
                        value="${opcionesVal}" style="background:#fff8e1; border-color:#ffe0b2;">
@@ -2690,13 +2691,14 @@ window.addBuilderFieldRow = function(nombreVal="", etiquetaVal="", tipoVal="text
                         <option value="parrafo" ${tipoVal==='parrafo' ? 'selected' : ''}>Parrafo</option>
                         <option value="numero" ${tipoVal==='numero' ? 'selected' : ''}>Número</option>
                         <option value="select" ${tipoVal==='select' ? 'selected' : ''}>Lista Desplegable</option>
+                      <option value="casillas_opciones" ${tipoVal==='casillas_opciones' ? 'selected' : ''}>Casillas opciones</option>
                         <option value="imagenes" ${tipoVal==='imagenes' ? 'selected' : ''}>Galería de fotos</option>
                         <option value="titulo" ${tipoVal==='titulo' ? 'selected' : ''}>-- Título de sección --</option>
                     </select>
                 </div>
             </div>
 
-            <div class="options-config ${tipoVal==='select' ? 'active' : ''}">
+                <div class="options-config ${(tipoVal==='select' || tipoVal==='casillas_opciones') ? 'active' : ''}">
                 <input type="text" class="field-options doc-input" 
                        placeholder="Opciones separadas por coma (Ej: Positivo, Negativo, Indeterminado)" 
                        value="${opcionesVal}" style="background:#fff8e1; border-color:#ffe0b2;">
@@ -2725,7 +2727,7 @@ function getDragAfterElement(container, y) {
 window.toggleOptionsInput = function(select) {
     const row = select.closest('.field-inputs');
     const optDiv = row.querySelector('.options-config');
-    if (select.value === 'select') {
+  if (select.value === 'select' || select.value === 'casillas_opciones') {
         optDiv.classList.add('active');
     } else {
         optDiv.classList.remove('active');

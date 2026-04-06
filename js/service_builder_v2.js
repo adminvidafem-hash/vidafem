@@ -315,7 +315,7 @@
       "<small>* Escribe las opciones separadas por comas.</small>" +
       "</div>";
 
-    if (typeVal === "select") row.classList.add("sbv2-options-active");
+    if (typeVal === "select" || typeVal === "casillas_opciones") row.classList.add("sbv2-options-active");
     els.fields.appendChild(row);
   }
 
@@ -325,6 +325,7 @@
       option("parrafo", "Parrafo", typeVal),
       option("numero", "Número", typeVal),
       option("select", "Lista Desplegable", typeVal),
+      option("casillas_opciones", "Casillas opciones", typeVal),
       option("imagenes", "Galería de fotos", typeVal),
       option("titulo", "-- Título de sección --", typeVal),
     ].join("");
@@ -345,7 +346,7 @@
   function toggleOptions(select) {
     var row = select.closest(".sbv2-field-row");
     if (!row) return;
-    if (select.value === "select") row.classList.add("sbv2-options-active");
+    if (select.value === "select" || select.value === "casillas_opciones") row.classList.add("sbv2-options-active");
     else row.classList.remove("sbv2-options-active");
   }
 
@@ -372,7 +373,7 @@
           var valueHtml = "";
           if (f.type === "parrafo") {
             valueHtml = '<div class="sbv2-field-value-box"></div>';
-          } else if (f.type === "select") {
+          } else if (f.type === "select" || f.type === "casillas_opciones") {
             var opts = f.options.length ? f.options : ["Opcion 1", "Opcion 2"];
             valueHtml =
               '<div class="sbv2-field-select-options">' +

@@ -2946,7 +2946,23 @@ function loadReportForEdit(reportId) {
       if (data.datos_json && typeof data.datos_json === 'object') {
         Object.keys(data.datos_json).forEach(key => {
           const input = document.getElementById("dyn_" + key);
-          if (input) input.value = data.datos_json[key];
+          if (input) {
+            input.value = data.datos_json[key];
+            return;
+          }
+
+          const checkboxes = document.querySelectorAll(`.dyn-check-option[data-field-key="${key}"]`);
+          if (!checkboxes || !checkboxes.length) return;
+
+          const raw = data.datos_json[key];
+          const selectedValues = Array.isArray(raw)
+            ? raw.map(v => String(v || "").trim()).filter(Boolean)
+            : String(raw || "").split(',').map(v => v.trim()).filter(Boolean);
+          const selectedSet = new Set(selectedValues);
+
+          checkboxes.forEach((cb) => {
+            cb.checked = selectedSet.has(String(cb.value || "").trim());
+          });
         });
       }
 
@@ -3475,6 +3491,32 @@ function renderDynamicFields(nombreServicio, campos) {
             }
             inputHtml = `<select id="dyn_${c.nombre}" class="doc-input">${optionsHtml}</select>`;
         }
+        // --- NUEVO: CASILLAS CON OPCIONES (CHECKBOXES) ---
+        else if (c.tipo === 'casillas_opciones') {
+          const opts = String(c.opciones || "")
+            .split(',')
+            .map(opt => String(opt || "").trim())
+            .filter(Boolean);
+          const optsHtml = (opts.length ? opts : ["Opción 1", "Opción 2"]).map((opt, idx) => {
+            const safeOpt = String(opt).replace(/"/g, '&quot;');
+            return `
+              <label style="display:flex; align-items:center; gap:8px; margin:6px 0; color:#444;">
+                <input type="checkbox"
+                     class="dyn-check-option"
+                     data-field-key="${c.nombre}"
+                     data-option-value="${safeOpt}"
+                     id="dyn_${c.nombre}_opt_${idx}"
+                     value="${safeOpt}">
+                <span>${opt}</span>
+              </label>
+            `;
+          }).join('');
+          inputHtml = `
+            <div class="dyn-check-group" data-field-key="${c.nombre}" style="padding:8px 10px; border:1px solid #ddd; border-radius:8px; background:#fff;">
+              ${optsHtml}
+            </div>
+          `;
+        }
         // --- NUEVO: NÚMEROS CON PLACEHOLDER "0" ---
         else if (c.tipo === 'numero') {
             inputHtml = `<input type="number" id="dyn_${c.nombre}" class="doc-input" placeholder="0">`;
@@ -3705,6 +3747,17 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
         inputs.forEach(inp => {
             const key = inp.id.replace("dyn_", "");
             datosDinamicos[key] = inp.value;
+        });
+
+        // 1.b Recolectar grupos de casillas (multi-seleccion)
+        const checkGroups = document.querySelectorAll("#form-dinamico .dyn-check-group");
+        checkGroups.forEach((group) => {
+          const key = String(group.getAttribute("data-field-key") || "").trim();
+          if (!key) return;
+          const selected = Array.from(group.querySelectorAll(".dyn-check-option:checked"))
+            .map((cb) => String(cb.value || "").trim())
+            .filter(Boolean);
+          datosDinamicos[key] = selected;
         });
 
         // 2. Imágenes (redimensionar según tamaño y slider de su galería)
