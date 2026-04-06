@@ -284,6 +284,7 @@
   function addFieldRow(nombre, etiqueta, tipo, opciones) {
     var row = document.createElement("div");
     row.className = "sbv2-field-row";
+    var keyVal = String(nombre || "").trim();
     var labelVal = etiqueta || "";
     var typeVal = tipo || "texto";
     var optionsVal = opciones || "";
@@ -301,6 +302,9 @@
       "</button>" +
       "</div>" +
       '<div class="sbv2-field-main">' +
+      '<input type="hidden" class="sbv2-field-name" value="' +
+      escapeHtml(keyVal) +
+      '">' +
       '<input type="text" class="sbv2-field-label" placeholder="Nombre del Campo (Ej: Tipo de Sangre)" value="' +
       escapeHtml(labelVal) +
       '">' +
@@ -414,6 +418,8 @@
     var rows = els.fields.querySelectorAll(".sbv2-field-row");
     var list = [];
     rows.forEach(function (row) {
+      var internalNameInput = row.querySelector(".sbv2-field-name");
+      var internalName = internalNameInput ? String(internalNameInput.value || "").trim() : "";
       var label = row.querySelector(".sbv2-field-label").value.trim();
       var type = row.querySelector(".sbv2-field-type").value;
       var optionsRaw = row.querySelector(".sbv2-field-options-input").value || "";
@@ -426,6 +432,7 @@
 
       if (!label && type !== "titulo") return;
       list.push({
+        name: internalName,
         label: label || "Titulo",
         type: type,
         options: options,
@@ -513,10 +520,12 @@
     var campos = [];
     var fields = collectFields();
     fields.forEach(function (f) {
-      var nombreInterno = toKey(f.label);
-      if (f.type === "titulo") {
-        nombreInterno =
-          "titulo_" + Math.random().toString(36).slice(2, 7);
+      var nombreInterno = String(f.name || "").trim();
+      if (!nombreInterno) {
+        nombreInterno = toKey(f.label);
+      }
+      if (f.type === "titulo" && !nombreInterno) {
+        nombreInterno = "titulo_" + Math.random().toString(36).slice(2, 7);
       }
       campos.push({
         nombre: nombreInterno,
