@@ -61,13 +61,36 @@ function getRequesterFromSession() {
   return (s.data && (s.data.usuario || s.data.usuario_doctor || s.data.nombre_doctor)) || null;
 }
 
+function shouldForceWorkerForDiagnosisAction_(action) {
+  const key = String(action || "").trim();
+  if (!key) return false;
+  return key === "save_diagnosis_advanced"
+    || key === "get_diagnosis_report"
+    || key === "delete_diagnosis_asset"
+    || key === "delete_diagnosis"
+    || key === "get_file_base64"
+    || key === "get_diagnosis_history";
+}
+
+function resolveDiagnosisApiUrl_(body) {
+  const action = body && body.action ? String(body.action).trim() : "";
+  const forceWorker = shouldForceWorkerForDiagnosisAction_(action);
+  const runtime = window.VF_API_RUNTIME || {};
+  const urls = window.VF_API_URLS || {};
+  const env = String(runtime.env || "prod").trim().toLowerCase() === "test" ? "test" : "prod";
+  const workerUrl = urls.worker && urls.worker[env] ? String(urls.worker[env]).trim() : "";
+  if (forceWorker && workerUrl) return workerUrl;
+  return API_URL;
+}
+
 function postDiagnosisApiJson_(payload) {
   const body = Object.assign({}, payload || {});
   const session = getSessionDataSafe();
   if (!body.session_token && session && session.session_token) {
     body.session_token = session.session_token;
   }
-  return fetch(API_URL, {
+  const targetUrl = resolveDiagnosisApiUrl_(body);
+  return fetch(targetUrl, {
     method: "POST",
     body: JSON.stringify(body)
   }).then(async (r) => {
