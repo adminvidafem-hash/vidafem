@@ -1651,11 +1651,15 @@ function normalizeDiagnosisReportResponseRow_(row) {
     pdf_url: normalizeText_(src.pdf_url),
     pdf_receta_url: normalizeText_(payload.pdf_receta_link),
     pdf_receta_link: normalizeText_(payload.pdf_receta_link),
+    pdfRecetaUrl: normalizeText_(payload.pdf_receta_link),
     pdf_certificado_url: normalizeText_(payload.pdf_certificado_link),
     pdf_certificado_link: normalizeText_(payload.pdf_certificado_link),
+    pdfCertificadoUrl: normalizeText_(payload.pdf_certificado_link),
     pdf_externo_url: externalUrl,
     pdf_externo_link: externalUrl,
+    pdfExternoUrl: externalUrl,
     pdf_externos: externalItems,
+    fechaReporte: reportDate,
     creado_por: normalizeLower_(src.creado_por)
   });
 }
