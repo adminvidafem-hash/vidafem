@@ -1445,10 +1445,10 @@ function loadDiagnosisHistory() {
                 const docLinks = {
                     report_pdf: String(rep.pdf_url || "").trim(),
                     recipe_pdf: String(extraData.pdf_receta_link || "").trim(),
-                    certificate_pdf: String(extraData.pdf_certificado_link || "").trim(),
+                    certificate_pdf: String(extraData.pdf_certificado_link || extraData.pdf_certificado_url || rep.pdf_certificado_url || rep.pdfCertificadoUrl || "").trim(),
                     external_pdfs: normalizeDiagnosisExternalPdfItemsClinical_(extraData)
                 };
-                if (docLinks.certificate_pdf && (reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO")) {
+                if (docLinks.certificate_pdf && ((reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO") || docLinks.report_pdf === docLinks.certificate_pdf)) {
                     docLinks.report_pdf = "";
                 }
 

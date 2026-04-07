@@ -1178,6 +1178,7 @@ function buildDiagnosisTemplateMedicalCertificateHtml_(payload) {
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 2.5mm 0; text-align:justify;\">"
     + "El presente certificado se otorga a petición de la persona interesada para los fines que crea conveniente."
     + "</p>"
+    + "<div style=\"height:10mm;\"></div>"
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 9mm 0;\">"
     + "<strong>Reposo médico:</strong> " + escapeHtmlDiagnosis_(reposoLinea)
     + (restSummary ? ("<br><strong>" + escapeHtmlDiagnosis_(restSummary) + "</strong>") : "")
@@ -1240,7 +1241,7 @@ async function buildDiagnosisMedicalCertificatePdfDataUrl_(payload) {
     "El presente certificado se otorga a petición de la persona interesada para los fines que crea conveniente."
   );
 
-  y += 10;
+  y += 14;
   writeParagraph("Reposo médico: " + reposoLinea);
   if (restSummary) {
     writeParagraph(restSummary);
@@ -3528,7 +3529,7 @@ function normalizeGeneratedDocsState_(docs) {
   let reportPdf = String(input.report_pdf || input.pdf_url || "").trim();
   const certificatePdf = String(input.certificate_pdf || input.pdf_certificado_link || input.pdf_certificado_url || input.pdfCertificadoUrl || "").trim();
   const isCertificateOnly = reportType === "CERTIFICADO MEDICO" || reportType === "CERTIFICADOMEDICO";
-  if (isCertificateOnly && certificatePdf) {
+  if ((isCertificateOnly && certificatePdf) || (reportPdf && certificatePdf && reportPdf === certificatePdf)) {
     reportPdf = "";
   }
   return {

@@ -1818,8 +1818,9 @@ function loadMyResults() {
 
                 let botonesHtml = "";
                 const reportTypeUpper = String(rep.tipo_examen || "").trim().toUpperCase();
+                const reportLink = String(rep.pdf_url || "").trim();
                 const certificateLink = String((extraData && (extraData.pdf_certificado_link || extraData.pdf_certificado_url)) || rep.pdf_certificado_url || rep.pdfCertificadoUrl || "").trim();
-                const shouldHideReportButton = !!(certificateLink && (reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO"));
+                const shouldHideReportButton = !!(certificateLink && ((reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO") || reportLink === certificateLink));
 
                 // A. Botón "Ver Detalles" - DESACTIVADO A PETICIÓN TUYA
                 /*
@@ -1830,9 +1831,9 @@ function loadMyResults() {
                 */
 
                 // B. Botón "Reporte PDF"
-                if (rep.pdf_url && !shouldHideReportButton) {
+                if (reportLink && !shouldHideReportButton) {
                     botonesHtml += `
-                        <button onclick="downloadFeedback(this, '${rep.pdf_url}')" class="btn-primary-small" style="background:${color}; padding:8px 15px; border:none; color:white; cursor:pointer;">
+                        <button onclick="downloadFeedback(this, '${reportLink}')" class="btn-primary-small" style="background:${color}; padding:8px 15px; border:none; color:white; cursor:pointer;">
                             <i class="fas fa-file-pdf"></i> Reporte
                         </button>`;
                 }
