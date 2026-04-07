@@ -608,6 +608,21 @@ function getMedicalCertificateDataForSave_() {
   return valid.data;
 }
 
+function getMedicalCertificateDataRequired_() {
+  const modal = document.getElementById("modalMedicalCertificate");
+  const modalDraft = readMedicalCertificateFromModal_();
+  const hasModalDraft = hasMeaningfulMedicalCertificateContent_({ certificado_medico: modalDraft });
+  const shouldUseModalDraft = !!(modal && (modal.classList.contains("active") || hasModalDraft));
+  const cert = normalizeMedicalCertificateData_(shouldUseModalDraft ? modalDraft : (currentMedicalCertificate || {}));
+  cert.nombre_paciente = cert.nombre_paciente || String(document.getElementById("patientNameDisplay").value || "").trim();
+  cert.cedula = cert.cedula || parseDisplayedCedulaFromHeader_();
+  const valid = validateMedicalCertificateData_(cert);
+  if (!valid.ok) {
+    throw new Error(valid.message);
+  }
+  return valid.data;
+}
+
 function updateMedicalCertificateSummary_() {
   const summary = document.getElementById("medicalCertificateSummary");
   if (!summary) return;
@@ -1961,9 +1976,12 @@ async function buildDiagnosisPdfPayloadsForSave_(payload) {
     if (recipePdf) out.recipe_pdf_data_url = recipePdf;
   }
 
-  if (hasMeaningfulMedicalCertificateContent_(data)) {
+  if (isCertificateOnly || hasMeaningfulMedicalCertificateContent_(data)) {
     const certPdf = await buildDiagnosisMedicalCertificatePdfDataUrl_(data);
     if (certPdf) out.certificate_pdf_data_url = certPdf;
+    if (isCertificateOnly && !certPdf) {
+      throw new Error("No se pudo generar el PDF del certificado medico. Verifica los datos e intenta de nuevo.");
+    }
   }
 
   return out;
@@ -4526,11 +4544,12 @@ function saveExternalPdfOnly(generarPdf, btn) {
       saveCommon("CERTIFICADO MEDICO", generarPdf, btn, async () => {
         const receta = getUniversalRecipeData();
         const pdfFiles = await getExternalPdfPayloadForSave_();
+        const certData = getMedicalCertificateDataRequired_();
         const out = {
           datos_json: {
             modo_guardado: "CERTIFICADO_MEDICO"
           },
-          certificado_medico: getMedicalCertificateDataForSave_(),
+          certificado_medico: certData,
           pdf_externos: pdfFiles
         };
         if (receta) {
