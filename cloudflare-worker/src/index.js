@@ -1494,6 +1494,12 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
   }
 
   const preparedData = prepared.data || normalizedData;
+  if (prepared.recipePdfUrl) {
+    preparedData.pdf_receta_link = normalizeText_(prepared.recipePdfUrl);
+  }
+  if (prepared.certificatePdfUrl) {
+    preparedData.pdf_certificado_link = normalizeText_(prepared.certificatePdfUrl);
+  }
   const storedPayload = buildDiagnosisStoragePayload_(preparedData, {
     id_reporte: idReporte,
     id_paciente: patientAccess.patient.id_paciente,
@@ -1526,7 +1532,12 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
     storedPayload.pdf_certificado_link = normalizeText_(existingPayload.pdf_certificado_link);
   }
 
-  const rowPdfUrl = normalizeText_(prepared.reportPdfUrl || (existing && existing.pdf_url) || "");
+  const rowPdfUrl = normalizeText_(
+    prepared.reportPdfUrl
+    || prepared.certificatePdfUrl
+    || (existing && existing.pdf_url)
+    || ""
+  );
 
   const row = {
     id_reporte: idReporte,
@@ -1569,7 +1580,8 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
       storage_info: {
         backend: hasWorkerStorageBinding_(env) ? "r2" : "none",
         report_key: normalizeText_(prepared.reportPdfKey),
-        recipe_key: normalizeText_(prepared.recipePdfKey)
+        recipe_key: normalizeText_(prepared.recipePdfKey),
+        certificate_key: normalizeText_(prepared.certificatePdfKey)
       },
       warning: cleanupWarning
     }
@@ -1640,6 +1652,10 @@ function normalizeDiagnosisReportResponseRow_(row) {
     ? normalizeText_(externalItems[0] && externalItems[0].url)
     : normalizeText_(payload.pdf_externo_link);
   const reportDate = normalizeIsoDateValue_(payload.fecha_reporte) || normalizeIsoDateValue_(src.fecha);
+  const rowPdfUrl = normalizeText_(src.pdf_url);
+  const reportType = normalizeUpper_(payload.tipo_examen || src.tipo_examen);
+  const certificateUrl = normalizeText_(payload.pdf_certificado_link)
+    || ((reportType === "CERTIFICADO MEDICO" || reportType === "CERTIFICADOMEDICO") ? rowPdfUrl : "");
 
   return Object.assign({}, src, {
     id_reporte: normalizeText_(src.id_reporte),
@@ -1648,13 +1664,13 @@ function normalizeDiagnosisReportResponseRow_(row) {
     fecha: normalizeText_(src.fecha),
     fecha_reporte: reportDate,
     datos_json: payload,
-    pdf_url: normalizeText_(src.pdf_url),
+    pdf_url: rowPdfUrl,
     pdf_receta_url: normalizeText_(payload.pdf_receta_link),
     pdf_receta_link: normalizeText_(payload.pdf_receta_link),
     pdfRecetaUrl: normalizeText_(payload.pdf_receta_link),
-    pdf_certificado_url: normalizeText_(payload.pdf_certificado_link),
-    pdf_certificado_link: normalizeText_(payload.pdf_certificado_link),
-    pdfCertificadoUrl: normalizeText_(payload.pdf_certificado_link),
+    pdf_certificado_url: certificateUrl,
+    pdf_certificado_link: certificateUrl,
+    pdfCertificadoUrl: certificateUrl,
     pdf_externo_url: externalUrl,
     pdf_externo_link: externalUrl,
     pdfExternoUrl: externalUrl,
@@ -5467,6 +5483,18 @@ function buildDiagnosisStoragePayload_(payload, options) {
     }
   });
 
+  if (Object.prototype.hasOwnProperty.call(data, "pdf_receta_link")) {
+    out.pdf_receta_link = normalizeText_(data.pdf_receta_link);
+  } else if (normalizeText_(oldPayload.pdf_receta_link)) {
+    out.pdf_receta_link = normalizeText_(oldPayload.pdf_receta_link);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "pdf_certificado_link")) {
+    out.pdf_certificado_link = normalizeText_(data.pdf_certificado_link);
+  } else if (normalizeText_(oldPayload.pdf_certificado_link)) {
+    out.pdf_certificado_link = normalizeText_(oldPayload.pdf_certificado_link);
+  }
+
   out.medicamentos = normalizeDiagnosisMedicamentosForStorage_(
     Object.prototype.hasOwnProperty.call(data, "medicamentos") ? data.medicamentos : oldPayload.medicamentos
   );
@@ -5487,8 +5515,6 @@ function buildDiagnosisStoragePayload_(payload, options) {
 
   if (Array.isArray(oldPayload.drive_file_ids)) out.drive_file_ids = oldPayload.drive_file_ids.slice();
   if (normalizeText_(oldPayload.report_folder_id)) out.report_folder_id = normalizeText_(oldPayload.report_folder_id);
-  if (normalizeText_(oldPayload.pdf_receta_link)) out.pdf_receta_link = normalizeText_(oldPayload.pdf_receta_link);
-  if (normalizeText_(oldPayload.pdf_certificado_link)) out.pdf_certificado_link = normalizeText_(oldPayload.pdf_certificado_link);
 
   return out;
 }
