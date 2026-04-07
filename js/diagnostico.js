@@ -5,7 +5,7 @@ let currentReportId = null;
 let CONFIG_CAMPOS = {};
 let SERVICES_METADATA = [];
 let hasUnsavedChanges = false;
-let currentGeneratedDocs = { report_pdf: "", recipe_pdf: "", certificate_pdf: "", external_pdf: "" };
+let currentGeneratedDocs = { report_pdf: "", recipe_pdf: "", certificate_pdf: "", external_pdf: "", report_type: "" };
 let currentExternalPdfItems = [];
 let externalPdfLocalSeq = 0;
 let currentMedicalCertificate = null;
@@ -3423,6 +3423,7 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
           });
       setCurrentExternalPdfItems_(savedExternalPdfItems);
       setGeneratedDocsState_({
+        report_type: tipo,
         pdf_url: verifiedState ? verifiedState.docs.pdf_url : res.pdf_url,
         pdf_receta_link: verifiedState ? verifiedState.docs.pdf_receta_link : (res.pdf_receta_url || res.pdf_receta_link),
         pdf_certificado_link: verifiedState ? verifiedState.docs.pdf_certificado_link : (res.pdf_certificado_url || res.pdf_certificado_link),
@@ -3537,10 +3538,18 @@ function restoreAllButtons(allBtns, btnClicked, originalContent) {
 function normalizeGeneratedDocsState_(docs) {
   const input = docs || {};
   const externalItems = getStoredExternalPdfItemsFromPayload_(input);
+  const reportType = String(input.report_type || input.tipo_examen || currentGeneratedDocs.report_type || "").trim().toUpperCase();
+  let reportPdf = String(input.report_pdf || input.pdf_url || "").trim();
+  const certificatePdf = String(input.certificate_pdf || input.pdf_certificado_link || input.pdf_certificado_url || input.pdfCertificadoUrl || "").trim();
+  const isCertificateOnly = reportType === "CERTIFICADO MEDICO" || reportType === "CERTIFICADOMEDICO";
+  if (isCertificateOnly && certificatePdf) {
+    reportPdf = "";
+  }
   return {
-    report_pdf: String(input.report_pdf || input.pdf_url || "").trim(),
+    report_type: reportType,
+    report_pdf: reportPdf,
     recipe_pdf: String(input.recipe_pdf || input.pdf_receta_link || input.pdf_receta_url || input.pdfRecetaUrl || "").trim(),
-    certificate_pdf: String(input.certificate_pdf || input.pdf_certificado_link || input.pdf_certificado_url || input.pdfCertificadoUrl || "").trim(),
+    certificate_pdf: certificatePdf,
     external_pdf: String(input.external_pdf || input.pdf_externo_link || input.pdf_externo_url || input.pdfExternoUrl || (externalItems[0] && externalItems[0].url) || "").trim()
   };
 }
@@ -3899,6 +3908,7 @@ function loadReportForEdit(reportId) {
       currentMedicalCertificate = null;
       setCurrentExternalPdfItems_(getStoredExternalPdfItemsFromPayload_(data));
       setGeneratedDocsState_({
+        report_type: data.tipo_examen || report.tipo_examen,
         pdf_url: report.pdf_url,
         pdf_receta_link: data.pdf_receta_link || report.pdf_receta_url || report.pdfRecetaUrl,
         pdf_certificado_link: data.pdf_certificado_link || report.pdf_certificado_url || report.pdfCertificadoUrl,
@@ -4897,6 +4907,7 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
             });
             setCurrentExternalPdfItems_(savedExternalPdfItems);
             setGeneratedDocsState_({
+                report_type: servicio,
             pdf_url: verifiedState ? verifiedState.docs.pdf_url : res.pdf_url,
             pdf_receta_link: verifiedState ? verifiedState.docs.pdf_receta_link : (res.pdf_receta_url || res.pdf_receta_link),
             pdf_certificado_link: verifiedState ? verifiedState.docs.pdf_certificado_link : (res.pdf_certificado_url || res.pdf_certificado_link),

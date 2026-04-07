@@ -1817,6 +1817,9 @@ function loadMyResults() {
                 const safeJson = encodeURIComponent(rep.datos_json);
 
                 let botonesHtml = "";
+                const reportTypeUpper = String(rep.tipo_examen || "").trim().toUpperCase();
+                const certificateLink = String((extraData && (extraData.pdf_certificado_link || extraData.pdf_certificado_url)) || rep.pdf_certificado_url || rep.pdfCertificadoUrl || "").trim();
+                const shouldHideReportButton = !!(certificateLink && (reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO"));
 
                 // A. Botón "Ver Detalles" - DESACTIVADO A PETICIÓN TUYA
                 /*
@@ -1827,7 +1830,7 @@ function loadMyResults() {
                 */
 
                 // B. Botón "Reporte PDF"
-                if (rep.pdf_url) {
+                if (rep.pdf_url && !shouldHideReportButton) {
                     botonesHtml += `
                         <button onclick="downloadFeedback(this, '${rep.pdf_url}')" class="btn-primary-small" style="background:${color}; padding:8px 15px; border:none; color:white; cursor:pointer;">
                             <i class="fas fa-file-pdf"></i> Reporte
@@ -1843,7 +1846,6 @@ function loadMyResults() {
                 }
 
                 // C2. Botón "Certificado PDF"
-                const certificateLink = String((extraData && (extraData.pdf_certificado_link || extraData.pdf_certificado_url)) || rep.pdf_certificado_url || rep.pdfCertificadoUrl || "").trim();
                 if (certificateLink) {
                     botonesHtml += `
                         <button onclick="downloadFeedback(this, '${certificateLink}')" class="btn-primary-small" style="background:#8e44ad; padding:8px 15px; border:none; color:white; cursor:pointer;">

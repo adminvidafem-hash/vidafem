@@ -1441,12 +1441,16 @@ function loadDiagnosisHistory() {
 
                 // 2. CONSTRUIR BOTONES
                 let botonesHtml = "";
+                const reportTypeUpper = String(rep.tipo_examen || "").trim().toUpperCase();
                 const docLinks = {
                     report_pdf: String(rep.pdf_url || "").trim(),
                     recipe_pdf: String(extraData.pdf_receta_link || "").trim(),
                     certificate_pdf: String(extraData.pdf_certificado_link || "").trim(),
                     external_pdfs: normalizeDiagnosisExternalPdfItemsClinical_(extraData)
                 };
+                if (docLinks.certificate_pdf && (reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO")) {
+                    docLinks.report_pdf = "";
+                }
 
                 // A. VER REPORTE (El PDF principal)
                 if (docLinks.report_pdf) {
@@ -1539,11 +1543,17 @@ document.head.appendChild(style);
 
 function normalizeDiagnosisAssetModalState_(state) {
     const src = state || {};
+    const reportTypeUpper = String(src.tipo_examen || src.report_type || "").trim().toUpperCase();
+    const certificatePdf = String(src.certificate_pdf || src.pdf_certificado_link || "").trim();
+    let reportPdf = String(src.report_pdf || src.pdf_url || "").trim();
+    if (certificatePdf && (reportTypeUpper === "CERTIFICADO MEDICO" || reportTypeUpper === "CERTIFICADOMEDICO")) {
+        reportPdf = "";
+    }
     return {
         id_reporte: String(src.id_reporte || "").trim(),
-        report_pdf: String(src.report_pdf || src.pdf_url || "").trim(),
+        report_pdf: reportPdf,
         recipe_pdf: String(src.recipe_pdf || src.pdf_receta_link || "").trim(),
-        certificate_pdf: String(src.certificate_pdf || src.pdf_certificado_link || "").trim(),
+        certificate_pdf: certificatePdf,
         external_pdfs: normalizeDiagnosisExternalPdfItemsClinical_(src)
     };
 }
