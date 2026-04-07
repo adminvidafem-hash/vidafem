@@ -56,6 +56,31 @@ function buildClinicalApiUrl_() {
     return baseUrl + glue + "t=" + Date.now();
 }
 
+function shouldForceWorkerForClinicalAction_(action) {
+    const key = String(action || "").trim();
+    if (!key) return false;
+    return key === "get_diagnosis_history"
+        || key === "get_diagnosis_report"
+        || key === "delete_diagnosis"
+        || key === "delete_diagnosis_asset"
+        || key === "get_file_base64"
+        || key === "save_diagnosis_advanced";
+}
+
+function resolveClinicalApiUrl_(payload) {
+    const body = payload && typeof payload === "object" ? payload : {};
+    const action = String(body.action || "").trim();
+    const forceWorker = shouldForceWorkerForClinicalAction_(action);
+    const runtime = window.VF_API_RUNTIME || {};
+    const urls = window.VF_API_URLS || {};
+    const env = String(runtime.env || "prod").trim().toLowerCase() === "test" ? "test" : "prod";
+    const workerUrl = urls.worker && urls.worker[env] ? String(urls.worker[env]).trim() : "";
+    if (forceWorker && workerUrl) {
+        return workerUrl + "?t=" + Date.now();
+    }
+    return buildClinicalApiUrl_();
+}
+
 function postClinicalApiJson_(payload) {
     const body = Object.assign({}, payload || {});
     if (!body.session_token && typeof window.getSessionToken === "function") {
@@ -68,7 +93,7 @@ function postClinicalApiJson_(payload) {
         if (fallbackToken) body.session_token = fallbackToken;
     }
 
-    return fetch(buildClinicalApiUrl_(), {
+    return fetch(resolveClinicalApiUrl_(body), {
         method: "POST",
         cache: "no-store",
         body: JSON.stringify(body)

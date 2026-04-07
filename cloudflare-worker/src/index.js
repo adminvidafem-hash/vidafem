@@ -1594,7 +1594,9 @@ async function handleGetDiagnosisHistory_(body, env) {
     return errorResult_(500, res.message || "No se pudo cargar el historial diagnostico.");
   }
 
-  const data = Array.isArray(res.data) ? res.data.slice().sort(compareDiagnosisDesc_) : [];
+  const data = Array.isArray(res.data)
+    ? res.data.slice().sort(compareDiagnosisDesc_).map(normalizeDiagnosisReportResponseRow_)
+    : [];
   return { status: 200, payload: { success: true, data } };
 }
 
@@ -1621,7 +1623,41 @@ async function handleGetDiagnosisReport_(body, env) {
     return access.result;
   }
 
-  return { status: 200, payload: { success: true, data: [report] } };
+  return {
+    status: 200,
+    payload: {
+      success: true,
+      data: [normalizeDiagnosisReportResponseRow_(report)]
+    }
+  };
+}
+
+function normalizeDiagnosisReportResponseRow_(row) {
+  const src = row && typeof row === "object" ? row : {};
+  const payload = parseStoredDiagnosisJson_(src.datos_json);
+  const externalItems = getDiagnosisExternalPdfItemsForWorker_(payload);
+  const externalUrl = externalItems.length
+    ? normalizeText_(externalItems[0] && externalItems[0].url)
+    : normalizeText_(payload.pdf_externo_link);
+  const reportDate = normalizeIsoDateValue_(payload.fecha_reporte) || normalizeIsoDateValue_(src.fecha);
+
+  return Object.assign({}, src, {
+    id_reporte: normalizeText_(src.id_reporte),
+    id_paciente: normalizeText_(src.id_paciente),
+    tipo_examen: normalizeText_(payload.tipo_examen || src.tipo_examen),
+    fecha: normalizeText_(src.fecha),
+    fecha_reporte: reportDate,
+    datos_json: payload,
+    pdf_url: normalizeText_(src.pdf_url),
+    pdf_receta_url: normalizeText_(payload.pdf_receta_link),
+    pdf_receta_link: normalizeText_(payload.pdf_receta_link),
+    pdf_certificado_url: normalizeText_(payload.pdf_certificado_link),
+    pdf_certificado_link: normalizeText_(payload.pdf_certificado_link),
+    pdf_externo_url: externalUrl,
+    pdf_externo_link: externalUrl,
+    pdf_externos: externalItems,
+    creado_por: normalizeLower_(src.creado_por)
+  });
 }
 
 async function handleDeleteDiagnosisAsset_(body, env) {
