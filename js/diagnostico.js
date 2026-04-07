@@ -451,7 +451,7 @@ function formatCertificateShortDate_(value) {
 function formatCertificateLongDate_(value) {
   const date = value instanceof Date ? value : new Date(value || Date.now());
   if (!date || Number.isNaN(date.getTime())) return "";
-  const weekdays = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
+  const weekdays = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
   const months = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
   return weekdays[date.getDay()] + " " + date.getDate() + " de " + months[date.getMonth()] + " de " + date.getFullYear();
 }
@@ -489,7 +489,7 @@ function getCertificateRestSummaryText_(data) {
   const startText = formatCertificateShortDate_(cert.reposo_inicio);
   const endText = formatCertificateShortDate_(cert.reposo_fin);
   if (!days || !startText || !endText) return "";
-  return "Tiempo de reposo: " + days + " dia(s), desde el " + startText + " hasta el " + endText + ".";
+  return "Tiempo de reposo: " + days + " día(s), desde el " + startText + " hasta el " + endText + ".";
 }
 
 function isMedicalCertificateEnabled_() {
@@ -1131,34 +1131,32 @@ function buildDiagnosisTemplateMedicalCertificateHtml_(payload) {
   const cert = normalizeMedicalCertificateData_(data.certificado_medico || {});
   const reportDate = getClinicalReportDateForDisplay_(data);
   const longDate = formatCertificateLongDate_(reportDate);
-  const shortDate = formatCertificateShortDate_(getClinicalReportDateInputValue_() || cert.reposo_inicio || "");
   const diagnosisLines = diagnosisValueToHtmlLines_(cert.diagnostico);
   const restSummary = getCertificateRestSummaryText_(cert);
   const reposoLinea = cert.reposo_sugerido === "SI" ? "SI" : "NO";
 
   return ""
     + "<article style=\"font-family:Arial,sans-serif;color:#111;\">"
-    + "<h1 style=\"font-size:14pt; margin:0 0 8mm 0; text-align:center; color:#36235d;\">CERTIFICADO MEDICO</h1>"
+    + "<h1 style=\"font-size:22pt; margin:0 0 8mm 0; text-align:center; color:#000; letter-spacing:0.5px;\">CERTIFICADO MÉDICO</h1>"
     + "<p style=\"margin:0 0 8mm 0; text-align:right; font-size:10.5pt;\">"
     + escapeHtmlDiagnosis_(String(cert.ciudad || "Guayaquil") + ", " + longDate)
     + "</p>"
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 2.5mm 0; text-align:justify;\">"
     + "Por medio del presente se certifica que la paciente <strong>" + escapeHtmlDiagnosis_(cert.nombre_paciente) + "</strong> con <strong>C.I " + escapeHtmlDiagnosis_(cert.cedula) + "</strong>. "
-    + "Acudio el dia de hoy a consulta medica en el establecimiento, presentando un cuadro clinico de <strong>" + diagnosisValueToHtmlLines_(cert.cuadro_clinico) + "</strong>, "
-    + "por lo cual fue valorada y atendida conforme a la sintomatologia referida. Con Diagnostico:"
+    + "Acudió a consulta médica en el establecimiento, presentando un cuadro clínico de <strong>" + diagnosisValueToHtmlLines_(cert.cuadro_clinico) + "</strong>, "
+    + "por lo cual fue valorada y atendida conforme a la sintomatología referida. Con diagnóstico:"
     + "</p>"
     + "<div style=\"font-size:11pt; line-height:1.6; margin:0 0 2.5mm 7mm;\">&#8226; " + (diagnosisLines || "--") + "</div>"
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 2.5mm 0; text-align:justify;\">"
-    + "El presente certificado se otorga a peticion de la persona interesada para ser presentado a su lugar de trabajo <strong>" + escapeHtmlDiagnosis_(cert.lugar_trabajo) + "</strong>. "
-    + "En donde labora como <strong>" + escapeHtmlDiagnosis_(cert.ocupacion) + "</strong>."
+    + "El presente certificado se otorga a petición de la persona interesada para ser presentado en su lugar de trabajo <strong>" + escapeHtmlDiagnosis_(cert.lugar_trabajo) + "</strong>, "
+    + "donde labora como <strong>" + escapeHtmlDiagnosis_(cert.ocupacion) + "</strong>."
     + "</p>"
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 2.5mm 0;\">"
-    + "<strong>Lugar de atencion:</strong> " + escapeHtmlDiagnosis_(cert.lugar_atencion)
+    + "<strong>Lugar de atención:</strong> " + escapeHtmlDiagnosis_(cert.lugar_atencion)
     + "<br><strong>Establecimiento:</strong> " + escapeHtmlDiagnosis_(cert.establecimiento)
     + "</p>"
     + "<p style=\"font-size:11pt; line-height:1.7; margin:0 0 2.5mm 0;\">"
-    + "<strong>Sugiere guardar reposo:</strong> " + escapeHtmlDiagnosis_(reposoLinea)
-    + (shortDate ? ("<br><strong>El dia:</strong> " + escapeHtmlDiagnosis_(shortDate) + " (" + escapeHtmlDiagnosis_(shortDate) + ")") : "")
+    + "<strong>Reposo médico:</strong> " + escapeHtmlDiagnosis_(reposoLinea)
     + (restSummary ? ("<br><strong>" + escapeHtmlDiagnosis_(restSummary) + "</strong>") : "")
     + "</p>"
     + "</article>";
@@ -1182,14 +1180,13 @@ async function buildDiagnosisMedicalCertificatePdfDataUrl_(payload) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const reportDate = getClinicalReportDateForDisplay_(data);
   const longDate = formatCertificateLongDate_(reportDate);
-  const shortDate = formatCertificateShortDate_(getClinicalReportDateInputValue_() || cert.reposo_inicio || "");
   const restSummary = getCertificateRestSummaryText_(cert);
   const reposoLinea = cert.reposo_sugerido === "SI" ? "SI" : "NO";
   let y = 18;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("CERTIFICADO MEDICO", 105, y, { align: "center" });
+  doc.setFontSize(24);
+  doc.text("CERTIFICADO MÉDICO", 105, y, { align: "center" });
   y += 10;
 
   doc.setFont("helvetica", "normal");
@@ -1208,26 +1205,22 @@ async function buildDiagnosisMedicalCertificatePdfDataUrl_(payload) {
     "Por medio del presente se certifica que la paciente "
     + cert.nombre_paciente
     + " con C.I " + cert.cedula
-    + ". Acudio el dia de hoy a consulta medica en el establecimiento, presentando un cuadro clinico de "
+    + ". Acudió a consulta médica en el establecimiento, presentando un cuadro clínico de "
     + cert.cuadro_clinico
-    + ", por lo cual fue valorada y atendida conforme a la sintomatologia referida."
+    + ", por lo cual fue valorada y atendida conforme a la sintomatología referida."
   );
 
-  writeParagraph("Diagnostico: " + cert.diagnostico);
+  writeParagraph("Diagnóstico: " + cert.diagnostico);
 
   writeParagraph(
-    "El presente certificado se otorga a peticion de la persona interesada para ser presentado a su lugar de trabajo "
+    "El presente certificado se otorga a petición de la persona interesada para ser presentado en su lugar de trabajo "
     + cert.lugar_trabajo
-    + ". En donde labora como " + cert.ocupacion + "."
+    + ", donde labora como " + cert.ocupacion + "."
   );
 
-  writeParagraph("Lugar de atencion: " + cert.lugar_atencion);
+  writeParagraph("Lugar de atención: " + cert.lugar_atencion);
   writeParagraph("Establecimiento: " + cert.establecimiento);
-  writeParagraph("Sugiere guardar reposo: " + reposoLinea);
-
-  if (shortDate) {
-    writeParagraph("El dia: " + shortDate + " (" + shortDate + ")");
-  }
+  writeParagraph("Reposo médico: " + reposoLinea);
   if (restSummary) {
     writeParagraph(restSummary);
   }
@@ -2072,6 +2065,17 @@ async function buildDiagnosisPdfPayloadsForSave_(payload) {
   }
 
   return out;
+}
+
+async function buildDiagnosisCertificatePdfPayloadForSave_(payload) {
+  const data = payload || {};
+  if (!hasMeaningfulMedicalCertificateContent_(data)) return {};
+  const certPdf = await withDiagnosisTimeout_(
+    buildDiagnosisMedicalCertificatePdfDataUrl_(data),
+    30000,
+    "La generación del PDF del certificado tardó demasiado."
+  );
+  return certPdf ? { certificate_pdf_data_url: certPdf } : {};
 }
 
 // Tamaños oficiales del reporte (documento del usuario)
@@ -3348,6 +3352,9 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
       generatedPdfPayload = await buildDiagnosisPdfPayloadsForSave_(data);
       Object.assign(data, generatedPdfPayload);
       btnClicked.innerHTML = `<i class="fas fa-circle-notch fa-spin-fast"></i> Subiendo...`;
+    } else if (hasMeaningfulMedicalCertificateContent_(data)) {
+      generatedPdfPayload = await buildDiagnosisCertificatePdfPayloadForSave_(data);
+      Object.assign(data, generatedPdfPayload);
     }
 
     const res = await postDiagnosisApiJson_({
@@ -3365,9 +3372,9 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
       setCurrentExternalPdfItems_(savedExternalPdfItems);
       setGeneratedDocsState_({
         pdf_url: res.pdf_url,
-        pdf_receta_link: res.pdf_receta_url,
-        pdf_certificado_link: res.pdf_certificado_url,
-        pdf_externo_link: res.pdf_externo_url
+        pdf_receta_link: res.pdf_receta_url || res.pdf_receta_link,
+        pdf_certificado_link: res.pdf_certificado_url || res.pdf_certificado_link,
+        pdf_externo_link: res.pdf_externo_url || res.pdf_externo_link
       });
       hasUnsavedChanges = false;
       
@@ -3479,9 +3486,9 @@ function normalizeGeneratedDocsState_(docs) {
   const externalItems = getStoredExternalPdfItemsFromPayload_(input);
   return {
     report_pdf: String(input.report_pdf || input.pdf_url || "").trim(),
-    recipe_pdf: String(input.recipe_pdf || input.pdf_receta_link || "").trim(),
-    certificate_pdf: String(input.certificate_pdf || input.pdf_certificado_link || "").trim(),
-    external_pdf: String(input.external_pdf || input.pdf_externo_link || (externalItems[0] && externalItems[0].url) || "").trim()
+    recipe_pdf: String(input.recipe_pdf || input.pdf_receta_link || input.pdf_receta_url || input.pdfRecetaUrl || "").trim(),
+    certificate_pdf: String(input.certificate_pdf || input.pdf_certificado_link || input.pdf_certificado_url || input.pdfCertificadoUrl || "").trim(),
+    external_pdf: String(input.external_pdf || input.pdf_externo_link || input.pdf_externo_url || input.pdfExternoUrl || (externalItems[0] && externalItems[0].url) || "").trim()
   };
 }
 
@@ -3840,9 +3847,9 @@ function loadReportForEdit(reportId) {
       setCurrentExternalPdfItems_(getStoredExternalPdfItemsFromPayload_(data));
       setGeneratedDocsState_({
         pdf_url: report.pdf_url,
-        pdf_receta_link: data.pdf_receta_link,
-        pdf_certificado_link: data.pdf_certificado_link,
-        pdf_externo_link: data.pdf_externo_link
+        pdf_receta_link: data.pdf_receta_link || report.pdf_receta_url || report.pdfRecetaUrl,
+        pdf_certificado_link: data.pdf_certificado_link || report.pdf_certificado_url || report.pdfCertificadoUrl,
+        pdf_externo_link: data.pdf_externo_link || report.pdf_externo_url || report.pdfExternoUrl
       });
 
       // 1. Configurar Servicio
@@ -4797,6 +4804,9 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
           generatedPdfPayload = await buildDiagnosisPdfPayloadsForSave_(dataObj);
             Object.assign(dataObj, generatedPdfPayload);
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Subiendo...';
+        } else if (hasMeaningfulMedicalCertificateContent_(dataObj)) {
+            generatedPdfPayload = await buildDiagnosisCertificatePdfPayloadForSave_(dataObj);
+            Object.assign(dataObj, generatedPdfPayload);
         }
 
         const requesterDoc = getRequesterFromSession();
@@ -4818,9 +4828,9 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
             setCurrentExternalPdfItems_(savedExternalPdfItems);
             setGeneratedDocsState_({
                 pdf_url: res.pdf_url,
-                pdf_receta_link: res.pdf_receta_url,
-              pdf_certificado_link: res.pdf_certificado_url,
-                pdf_externo_link: res.pdf_externo_url
+                pdf_receta_link: res.pdf_receta_url || res.pdf_receta_link,
+              pdf_certificado_link: res.pdf_certificado_url || res.pdf_certificado_link,
+                pdf_externo_link: res.pdf_externo_url || res.pdf_externo_link
             });
             hasUnsavedChanges = false; 
             btn.innerHTML = '<i class="fas fa-check"></i> OK';
