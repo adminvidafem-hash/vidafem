@@ -549,8 +549,6 @@ function fillMedicalCertificateModalFields_(source) {
   setValue("certPacienteCedula", cert.cedula || parseDisplayedCedulaFromHeader_());
   setValue("certCuadroClinico", cert.cuadro_clinico);
   setValue("certDiagnostico", cert.diagnostico);
-  setValue("certLugarTrabajo", cert.lugar_trabajo);
-  setValue("certOcupacion", cert.ocupacion);
   setValue("certReposoSugerido", cert.reposo_sugerido);
   setValue("certReposoInicio", cert.reposo_inicio);
   setValue("certReposoFin", cert.reposo_fin);
@@ -569,8 +567,6 @@ function readMedicalCertificateFromModal_() {
     cedula: getValue("certPacienteCedula"),
     cuadro_clinico: getValue("certCuadroClinico"),
     diagnostico: getValue("certDiagnostico"),
-    lugar_trabajo: getValue("certLugarTrabajo"),
-    ocupacion: getValue("certOcupacion"),
     reposo_sugerido: getValue("certReposoSugerido") || "NO",
     reposo_inicio: getValue("certReposoInicio"),
     reposo_fin: getValue("certReposoFin")
@@ -583,9 +579,7 @@ function validateMedicalCertificateData_(data) {
     ["nombre_paciente", "nombre del paciente"],
     ["cedula", "cedula / C.I."],
     ["cuadro_clinico", "cuadro clinico"],
-    ["diagnostico", "diagnostico"],
-    ["lugar_trabajo", "lugar donde labora"],
-    ["ocupacion", "ocupacion"]
+    ["diagnostico", "diagnostico"]
   ];
   for (let i = 0; i < required.length; i++) {
     const key = required[i][0];
@@ -612,9 +606,7 @@ function hasMeaningfulMedicalCertificateContent_(payload) {
   if (!cert) return false;
   const textFields = [
     cert.cuadro_clinico,
-    cert.diagnostico,
-    cert.lugar_trabajo,
-    cert.ocupacion
+    cert.diagnostico
   ];
   return textFields.some((v) => !!String(v || "").trim());
 }
