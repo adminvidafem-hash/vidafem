@@ -1483,7 +1483,6 @@ function loadDiagnosisHistory() {
 
                 const btnEliminar = buildDiagnosisAssetDeleteTriggerHtml_(rep.id_reporte, docLinks);
                 const bulkCheckHtml = buildPatientBulkCheckboxHtml_("diagnosticos", rep.id_reporte, "Seleccionar");
-                const reportTypeUpper = String(rep.tipo_examen || "").trim().toUpperCase();
                 const cardAccentColor = reportTypeUpper === "RECETA"
                     ? "#27ae60"
                     : ((reportTypeUpper === "EXAMENPDF" || reportTypeUpper === "EXAMEN PDF") ? "#2980b9" : "#36235d");
