@@ -1318,6 +1318,51 @@ function withDiagnosisTimeout_(promise, timeoutMs, timeoutMessage) {
   });
 }
 
+function diagnosisDataUrlToBlob_(dataUrl) {
+  const raw = String(dataUrl || "").trim();
+  if (!raw || raw.indexOf(",") === -1) {
+    throw new Error("PDF local inválido.");
+  }
+  const parts = raw.split(",");
+  const header = parts[0] || "";
+  const body = parts.slice(1).join(",");
+  const mimeMatch = /data:([^;]+)/i.exec(header);
+  const mime = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "application/pdf";
+  const binary = window.atob(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+async function openDiagnosisPdfInWindow_(pdfWindow, pdfUrl) {
+  if (!pdfWindow) return false;
+  const target = String(pdfUrl || "").trim();
+  if (!target) return false;
+
+  if (!/^data:application\/pdf/i.test(target)) {
+    pdfWindow.location.href = target;
+    return true;
+  }
+
+  const blob = diagnosisDataUrlToBlob_(target);
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    pdfWindow.location.replace(blobUrl);
+  } catch (e) {
+    pdfWindow.document.open();
+    pdfWindow.document.write('<html><body style="margin:0;background:#111;"><iframe src="' + blobUrl + '" style="border:none;width:100vw;height:100vh;"></iframe></body></html>');
+    pdfWindow.document.close();
+  }
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {}
+  }, 120000);
+  return true;
+}
+
 function isDiagnosisCanvasSliceMostlyBlank_(canvas, startY, sliceHeight) {
   if (!canvas || sliceHeight <= 0 || sliceHeight > 96) return false;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -3356,8 +3401,8 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
             targetPdfUrl = primaryPdf || certificatePdf || recipePdf || externalPdf;
           }
 
-          if (targetPdfUrl) {
-              pdfWindow.location.href = targetPdfUrl;
+            if (targetPdfUrl) {
+              await openDiagnosisPdfInWindow_(pdfWindow, targetPdfUrl);
           } else {
               const localReportPdf = String(generatedPdfPayload && generatedPdfPayload.report_pdf_data_url || "").trim();
               const localRecipePdf = String(generatedPdfPayload && generatedPdfPayload.recipe_pdf_data_url || "").trim();
@@ -3378,7 +3423,7 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
               }
 
               if (localTargetPdf) {
-                pdfWindow.location.href = localTargetPdf;
+                await openDiagnosisPdfInWindow_(pdfWindow, localTargetPdf);
                 if (window.showToast) {
                   window.showToast("Guardado correcto. Se abrio el PDF local porque el servidor no devolvio enlace.", "warning");
                 }
@@ -4794,7 +4839,7 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
               const targetPdfUrl = mainPdfUrl || certificatePdfUrl || recipePdfUrl || externalPdfUrl;
                 if(targetPdfUrl) {
                     console.log("PDF URL recibida:", targetPdfUrl);
-                    pdfWindow.location.href = targetPdfUrl;
+                  await openDiagnosisPdfInWindow_(pdfWindow, targetPdfUrl);
                     setTimeout(() => window.navigateWithEnv(`clinical.html?id=${currentPatientId}&tab=diagnostico`), 2000);
                 } else {
                   const localReportPdf = String(generatedPdfPayload && generatedPdfPayload.report_pdf_data_url || "").trim();
@@ -4802,7 +4847,7 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
                   const localCertificatePdf = String(generatedPdfPayload && generatedPdfPayload.certificate_pdf_data_url || "").trim();
                   const localTargetPdf = localReportPdf || localCertificatePdf || localRecipePdf;
                   if (localTargetPdf) {
-                    pdfWindow.location.href = localTargetPdf;
+                    await openDiagnosisPdfInWindow_(pdfWindow, localTargetPdf);
                     alert("⚠️ Aviso: Se guardo y se abrio PDF local porque el servidor no devolvio enlace.");
                     setTimeout(() => window.navigateWithEnv(`clinical.html?id=${currentPatientId}&tab=diagnostico`), 2000);
                   } else {
