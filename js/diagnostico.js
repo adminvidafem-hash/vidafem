@@ -1017,12 +1017,24 @@ function buildDiagnosisTemplateSignatureHtml_(payload) {
   if (isElectronic && rememberedSignatureData && rememberedSignatureData.certInfo) {
       const certName = rememberedSignatureData.certInfo.name;
       const signDate = rememberedSignatureData.certInfo.date;
+      const qrBase64 = rememberedSignatureData.certInfo.qrBase64;
+      
+      const qrHtml = qrBase64 
+        ? "<td style=\"width:22mm; padding:3mm; text-align:center; vertical-align:middle; border-right:1px solid #dbe6f2;\"><img src=\"" + qrBase64 + "\" style=\"width:20mm; height:20mm; display:block; margin:0 auto;\" crossorigin=\"anonymous\" /></td>"
+        : "";
+
       electronicHtml = ""
-        + "<div style=\"margin:0 auto 10mm auto; width:100%; max-width:140mm; border:1.5px solid #2980b9; border-radius:4px; padding:4mm; background-color:#f4f9fd; text-align:left;\">"
-        + "<div style=\"font-size:8pt; font-weight:bold; color:#2980b9; margin-bottom:2mm;\">FIRMADO ELECTRÓNICAMENTE POR:</div>"
+        + "<table style=\"margin:0 auto 10mm auto; width:100%; max-width:140mm; border:1.5px solid #2980b9; border-radius:4px; background-color:#f4f9fd; border-collapse:collapse;\">"
+        + "<tr>"
+        + qrHtml
+        + "<td style=\"padding:3mm 4mm; text-align:left; vertical-align:middle;\">"
+        + "<div style=\"font-size:8pt; font-weight:bold; color:#2980b9; margin-bottom:1.5mm;\">FIRMADO ELECTRÓNICAMENTE POR:</div>"
         + "<div style=\"font-size:10pt; font-weight:bold; color:#111; margin-bottom:1mm;\">" + escapeHtmlDiagnosis_(certName) + "</div>"
         + "<div style=\"font-size:8pt; color:#333;\">Fecha: " + escapeHtmlDiagnosis_(signDate) + "</div>"
-        + "</div>";
+        + "<div style=\"font-size:7pt; color:#666; margin-top:1mm;\">Validez verificable mediante aplicativo FirmaEC o PAdES.</div>"
+        + "</td>"
+        + "</tr>"
+        + "</table>";
   }
 
   if (!includeSignature && !electronicHtml) return "";
@@ -1232,19 +1244,36 @@ function drawSignaturesOnJsPdfFallback_(doc, y, data) {
         doc.setLineWidth(0.5);
         doc.rect(35, y, 140, 20, "FD");
         
+        const qrBase64 = rememberedSignatureData.certInfo.qrBase64;
+        let textStartX = 39;
+        
+        if (qrBase64) {
+            try {
+                doc.addImage(qrBase64, "PNG", 37, y + 2, 16, 16);
+                doc.setDrawColor(219, 230, 242);
+                doc.setLineWidth(0.3);
+                doc.line(55, y, 55, y + 20);
+                textStartX = 59;
+            } catch(e) {}
+        }
+
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.setTextColor(41, 128, 185);
-        doc.text("FIRMADO ELECTRÓNICAMENTE POR:", 39, y + 6);
+        doc.text("FIRMADO ELECTRÓNICAMENTE POR:", textStartX, y + 6);
         
         doc.setFontSize(10);
         doc.setTextColor(17, 17, 17);
-        doc.text(rememberedSignatureData.certInfo.name, 39, y + 12);
+        doc.text(rememberedSignatureData.certInfo.name, textStartX, y + 11);
         
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(51, 51, 51);
-        doc.text("Fecha: " + rememberedSignatureData.certInfo.date, 39, y + 17);
+        doc.text("Fecha: " + rememberedSignatureData.certInfo.date, textStartX, y + 15);
+        
+        doc.setFontSize(7);
+        doc.setTextColor(102, 102, 102);
+        doc.text("Validez verificable mediante aplicativo FirmaEC.", textStartX, y + 18.5);
         
         y += 20; 
     }
@@ -4831,6 +4860,7 @@ window.applyElectronicSignature = function() {
     const password = document.getElementById("electronicSignaturePassword").value;
     const remember = document.getElementById("rememberElectronicSignature").checked;
     const fileInput = document.getElementById("electronicSignatureFile");
+    const btn = document.getElementById("btnApplyElectronicSignature");
     
     if (!password) {
         alert("Debes ingresar la contraseña de tu firma electrónica.");
@@ -4843,7 +4873,12 @@ window.applyElectronicSignature = function() {
         return;
     }
     
-    const processP12AndContinue = (binaryString) => {
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
+    }
+    
+    const processP12AndContinue = async (binaryString) => {
         try {
             // 1. Desencriptar y validar el .p12 con node-forge
             const p12Asn1 = forge.asn1.fromDer(binaryString);
@@ -4857,10 +4892,26 @@ window.applyElectronicSignature = function() {
             const subject = cert.subject.attributes.find(a => a.shortName === 'CN' || a.name === 'commonName');
             const commonName = subject ? subject.value : "Profesional Médico";
             
+            // 3. Generar QR Code de Validación
+            const signDate = new Date().toLocaleString("es-EC");
+            const qrText = "FIRMADO POR: " + commonName + "\nFECHA: " + signDate + "\nVALIDACION: FirmaEC / PAdES";
+            const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=" + encodeURIComponent(qrText);
+            let qrBase64 = "";
+            try {
+                const qrRes = await fetch(qrUrl);
+                const qrBlob = await qrRes.blob();
+                qrBase64 = await new Promise(r => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => r(reader.result);
+                    reader.readAsDataURL(qrBlob);
+                });
+            } catch(e) { console.warn("No se pudo generar QR", e); }
+
             // Guardamos la info extraída
             rememberedSignatureData.certInfo = { 
                 name: commonName, 
-                date: new Date().toLocaleString("es-EC") 
+                date: signDate,
+                qrBase64: qrBase64
             };
             
             rememberedSignatureData.password = password;
@@ -4881,6 +4932,11 @@ window.applyElectronicSignature = function() {
         } catch (err) {
             console.error("Error desencriptando .p12:", err);
             alert("Contraseña incorrecta o archivo .p12 inválido/corrupto.");
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "Verificar y Cargar Firma";
+            }
         }
     };
     
