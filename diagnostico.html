@@ -500,6 +500,7 @@
                     <span class="close-modal" onclick="closeElectronicSignatureModal()">&times;</span>
                 </div>
                 <div class="modal-body">
+                    <form onsubmit="event.preventDefault(); applyElectronicSignature();">
                     <p style="margin:0 0 14px; color:#5b6470;">
                         Selecciona tu archivo de firma electrónica (.p12) e ingresa la contraseña para estampar el documento.
                     </p>
@@ -527,8 +528,9 @@
                     </div>
                     <div style="margin-top:16px; text-align:right; display:flex; justify-content:flex-end; gap:10px;">
                         <button type="button" class="btn-primary-small" style="background:#666;" onclick="closeElectronicSignatureModal()">Cancelar</button>
-                        <button type="button" class="btn-primary-small" style="background:#2980b9;" id="btnApplyElectronicSignature" onclick="applyElectronicSignature()">Verificar y Cargar Firma</button>
+                        <button type="submit" class="btn-primary-small" style="background:#2980b9;" id="btnApplyElectronicSignature">Verificar y Cargar Firma</button>
                     </div>
+                    </form>
                 </div>
             </div>
         </div>

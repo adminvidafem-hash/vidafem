@@ -1272,10 +1272,7 @@ window.handleP12Upload = function(input) {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-      const arrayBuffer = e.target.result;
-      const bytes = new Uint8Array(arrayBuffer);
-      let binaryStr = "";
-      for (let i = 0; i < bytes.length; i++) binaryStr += String.fromCharCode(bytes[i]);
+      const binaryStr = e.target.result;
 
       let commonName = "Profesional Médico";
       try {

@@ -4988,15 +4988,10 @@ window.applyElectronicSignature = function() {
     if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            const arrayBuffer = e.target.result;
-            const bytes = new Uint8Array(arrayBuffer);
-            let binaryStr = "";
-            for (let i = 0; i < bytes.length; i++) {
-                binaryStr += String.fromCharCode(bytes[i]);
-            }
+            const binaryStr = e.target.result;
             processP12AndContinue(binaryStr);
         };
-        reader.readAsArrayBuffer(file);
+        reader.readAsBinaryString(file);
     } else {
         processP12AndContinue(rememberedSignatureData.fileData);
     }
@@ -5484,26 +5479,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
-    }
-});
-
-// 3. Interceptar cierre de pestaña o recarga (Navegador)
-window.addEventListener("beforeunload", (e) => {
-    if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = ""; // Necesario para Chrome/Edge
-    }
-});
-    }
-});
-
-// 3. Interceptar cierre de pestaña o recarga (Navegador)
-window.addEventListener("beforeunload", (e) => {
-    if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = ""; // Necesario para Chrome/Edge
-    }
-});
     }
 });
 
