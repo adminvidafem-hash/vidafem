@@ -68,7 +68,10 @@ const LOCAL_ACTIONS = new Set([
   "superadmin_update_patient_management",
   "superadmin_delete_patient",
   "health",
-  "ping"
+  "ping",
+  "get_p12_status",
+  "upload_p12",
+  "delete_p12"
 ]);
 
 export default {
@@ -338,6 +341,12 @@ async function handleLocalAction_(action, body, env, url) {
           generated_at: new Date().toISOString()
         }
       };
+    case "get_p12_status":
+      return handleGetP12Status_(body, env);
+    case "upload_p12":
+      return handleUploadP12_(body, env);
+    case "delete_p12":
+      return handleDeleteP12_(body, env);
     default:
       return {
         status: 501,
@@ -3707,6 +3716,58 @@ async function handleSuperadminDeletePatient_(body, env) {
     patient_id: patientId,
     requester: validation.session.user_id
   });
+}
+
+async function handleGetP12Status_(body, env) {
+  const validation = await validateOwnSessionAction_(env, body, { allowRoles: ["admin", "superadmin"] });
+  if (!validation.ok) return validation.result;
+  const bucket = getWorkerStorageBucket_(env);
+  if (!bucket) return errorResult_(500, "R2 no esta configurado en el Worker.");
+  const key = "firmas/" + validation.session.user_id + "/firma.p12";
+  const obj = await bucket.head(key);
+  return { status: 200, payload: { success: true, has_p12: !!obj, uploaded_at: obj ? obj.uploaded : null } };
+}
+
+async function handleUploadP12_(body, env) {
+  const validation = await validateOwnSessionAction_(env, body, { allowRoles: ["admin", "superadmin"] });
+  if (!validation.ok) return validation.result;
+  const bucket = getWorkerStorageBucket_(env);
+  if (!bucket) return errorResult_(500, "R2 no esta configurado en el Worker.");
+  
+  const dataUrl = normalizeText_(body.p12_data_url);
+  if (!dataUrl) return { status: 400, payload: { success: false, message: "Falta el archivo p12." } };
+
+  const parsed = parseDataUrlWorker_(dataUrl);
+  if (!parsed || !parsed.base64) return { status: 400, payload: { success: false, message: "Archivo p12 invalido." } };
+
+  let bytes;
+  try {
+    const binary = atob(parsed.base64);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch (e) {
+    return { status: 400, payload: { success: false, message: "No se pudo decodificar el archivo p12." } };
+  }
+
+  const key = "firmas/" + validation.session.user_id + "/firma.p12";
+  try {
+    await bucket.put(key, bytes, {
+      httpMetadata: { contentType: "application/x-pkcs12", cacheControl: "private, no-cache" }
+    });
+  } catch (e) {
+    return errorResult_(500, "No se pudo guardar la firma en R2: " + toErrorMessage(e));
+  }
+  return { status: 200, payload: { success: true, message: "Firma guardada en la boveda." } };
+}
+
+async function handleDeleteP12_(body, env) {
+  const validation = await validateOwnSessionAction_(env, body, { allowRoles: ["admin", "superadmin"] });
+  if (!validation.ok) return validation.result;
+  const bucket = getWorkerStorageBucket_(env);
+  if (!bucket) return errorResult_(500, "R2 no esta configurado en el Worker.");
+  const key = "firmas/" + validation.session.user_id + "/firma.p12";
+  await bucket.delete(key);
+  return { status: 200, payload: { success: true, message: "Firma eliminada de la boveda." } };
 }
 
 async function requireAccessiblePatientForAction_(env, body, options) {
