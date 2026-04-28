@@ -3315,12 +3315,18 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
 
   // 1. ABRIR VENTANA DE CARGA (Anti-Bloqueo)
   if (generarPdf) {
-      pdfWindow = window.open("", "_blank");
-      if (pdfWindow) {
-          pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></body></html>");
+      if (window.globalPdfWindow && !window.globalPdfWindow.closed) {
+          pdfWindow = window.globalPdfWindow;
+          pdfWindow.document.body.innerHTML = "<div style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></div>";
+          window.globalPdfWindow = null;
       } else {
-          alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
-          return; // Cancelar si está bloqueado
+          pdfWindow = window.open("", "_blank");
+          if (pdfWindow) {
+              pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></body></html>");
+          } else {
+              alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
+              return; // Cancelar si está bloqueado
+          }
       }
   }
 
@@ -4676,14 +4682,33 @@ document.addEventListener("DOMContentLoaded", function() {
  setCurrentExternalPdfItems_([]);
 });
 // --- FUNCIÓN MAESTRA DE GUARDADO (Poner al final de diagnostico.js) ---
+window.globalPdfWindow = null;
+
 function handleMasterSave(generatePdf, btn) {
     const isElectronicSignatureChecked = document.getElementById("includeElectronicSignature") && document.getElementById("includeElectronicSignature").checked;
     
     if (isElectronicSignatureChecked && generatePdf) {
+        window.globalPdfWindow = window.open("", "_blank");
+        if (window.globalPdfWindow) {
+            window.globalPdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Preparando documento...</h2><p>Por favor espere, ingrese su clave de firma electrónica...</p></body></html>");
+        } else {
+            alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
+            return;
+        }
         openElectronicSignatureModal(btn);
         return; // Pausamos el flujo aquí hasta que ponga la clave en el modal
     }
     
+    if (generatePdf) {
+        window.globalPdfWindow = window.open("", "_blank");
+        if (window.globalPdfWindow) {
+            window.globalPdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Inicializando...</h2><p>Procesando solicitud...</p></body></html>");
+        } else {
+            alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
+            return;
+        }
+    }
+
     executeMasterSaveFlow(generatePdf, btn);
 }
 
@@ -4740,6 +4765,10 @@ window.closeElectronicSignatureModal = function() {
     const modal = document.getElementById("modalElectronicSignature");
     if (modal) modal.classList.remove("active");
     pendingSignatureBtn = null;
+    if (window.globalPdfWindow) {
+        window.globalPdfWindow.close();
+        window.globalPdfWindow = null;
+    }
 };
 
 window.applyElectronicSignature = function() {
@@ -4758,10 +4787,10 @@ window.applyElectronicSignature = function() {
         return;
     }
     
-    const processP12AndContinue = (arrayBuffer) => {
+    const processP12AndContinue = (binaryString) => {
         try {
             // 1. Desencriptar y validar el .p12 con node-forge
-            const p12Asn1 = forge.asn1.fromDer(forge.util.createBuffer(new Uint8Array(arrayBuffer)));
+            const p12Asn1 = forge.asn1.fromDer(binaryString);
             const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, password);
             
             // 2. Extraer el certificado y el Nombre del Profesional
@@ -4786,7 +4815,9 @@ window.applyElectronicSignature = function() {
                 if (fileInput) fileInput.value = "";
             }
             
-            closeElectronicSignatureModal();
+            const modal = document.getElementById("modalElectronicSignature");
+            if (modal) modal.classList.remove("active");
+            pendingSignatureBtn = null;
             
             // 3. Continuar con el guardado maestro
             if (pendingSignatureBtn) {
@@ -4795,6 +4826,10 @@ window.applyElectronicSignature = function() {
             
         } catch (err) {
             console.error("Error desencriptando .p12:", err);
+            if (window.globalPdfWindow) {
+                window.globalPdfWindow.close();
+                window.globalPdfWindow = null;
+            }
             alert("Contraseña incorrecta o archivo .p12 inválido/corrupto.");
         }
     };
@@ -4802,7 +4837,13 @@ window.applyElectronicSignature = function() {
     if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            processP12AndContinue(e.target.result);
+            const arrayBuffer = e.target.result;
+            const bytes = new Uint8Array(arrayBuffer);
+            let binaryStr = "";
+            for (let i = 0; i < bytes.length; i++) {
+                binaryStr += String.fromCharCode(bytes[i]);
+            }
+            processP12AndContinue(binaryStr);
         };
         reader.readAsArrayBuffer(file);
     } else {
@@ -4998,12 +5039,18 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
 
     // 2. ABRIR VENTANA DE CARGA (Anti-Bloqueo)
     if (generatePdf) {
-        pdfWindow = window.open("", "_blank");
-        if (pdfWindow) {
-            pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></body></html>");
+        if (window.globalPdfWindow && !window.globalPdfWindow.closed) {
+            pdfWindow = window.globalPdfWindow;
+            pdfWindow.document.body.innerHTML = "<div style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></div>";
+            window.globalPdfWindow = null;
         } else {
-            alert("⚠️ El navegador bloqueó la ventana emergente. Por favor permita pop-ups para este sitio.");
-            return; // Cancelar si no se puede abrir la ventana
+            pdfWindow = window.open("", "_blank");
+            if (pdfWindow) {
+                pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></body></html>");
+            } else {
+                alert("⚠️ El navegador bloqueó la ventana emergente. Por favor permita pop-ups para este sitio.");
+                return; // Cancelar si no se puede abrir la ventana
+            }
         }
     }
     
