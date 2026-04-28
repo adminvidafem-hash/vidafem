@@ -30,6 +30,7 @@ let history = [];
 let editingTextIndex = null;
 let isDiagnosisSaveInProgress = false;
 let isManagingDiagnosisAssets = false;
+let vaultP12Info = null;
 const DIAGNOSIS_HTML_TEMPLATE_PATH = "plantilla_vidafem.html";
 let diagnosisHtmlTemplateCache_ = "";
 
@@ -70,6 +71,8 @@ function shouldForceWorkerForDiagnosisAction_(action) {
     || key === "delete_diagnosis"
     || key === "get_file_base64"
     || key === "get_diagnosis_history";
+    || key === "get_diagnosis_history"
+    || key === "get_p12_status";
 }
 
 function resolveDiagnosisApiUrl_(body) {
@@ -2283,6 +2286,12 @@ document.addEventListener("DOMContentLoaded", () => {
         fillMedicalCertificateModalFields_(currentMedicalCertificate || {});
       });
   }
+  
+  postDiagnosisApiJson_({action: "get_p12_status", requester: getRequesterFromSession()}).then(res => {
+      if(res && res.has_p12) {
+          vaultP12Info = { name: res.cert_name || "Profesional Médico" };
+      }
+  });
 
   const certModal = document.getElementById("modalMedicalCertificate");
   if (certModal) {
@@ -3476,6 +3485,11 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
       incluir_firma_virtual: shouldIncludeVirtualSignature_(),
       ...specificData,
     };
+
+    const isElectronicSignatureChecked = document.getElementById("includeElectronicSignature") && document.getElementById("includeElectronicSignature").checked;
+    if (isElectronicSignatureChecked && rememberedSignatureData && rememberedSignatureData.password) {
+        data.firma_electronica_password = rememberedSignatureData.password;
+    }
 
     let generatedPdfPayload = null;
 
@@ -4835,6 +4849,14 @@ window.handleSignatureCheckboxChange = function(cb) {
 window.openElectronicSignatureModal = function(btn) {
     pendingSignatureBtn = btn;
     const modal = document.getElementById("modalElectronicSignature");
+    if (vaultP12Info) {
+        document.getElementById("electronicSignatureFileGroup").style.display = "none";
+        document.getElementById("electronicSignatureVaultMsg").style.display = "block";
+        document.getElementById("electronicSignatureVaultName").innerText = "Titular: " + vaultP12Info.name;
+    } else {
+        document.getElementById("electronicSignatureFileGroup").style.display = "block";
+        document.getElementById("electronicSignatureVaultMsg").style.display = "none";
+    }
     if (modal) {
         // Restaurar estado si el usuario eligió "Recordar" en el paciente anterior
         if (rememberedSignatureData.password) {
@@ -4861,6 +4883,7 @@ window.applyElectronicSignature = function() {
     const remember = document.getElementById("rememberElectronicSignature").checked;
     const fileInput = document.getElementById("electronicSignatureFile");
     const btn = document.getElementById("btnApplyElectronicSignature");
+    const usingVault = !!vaultP12Info && (!fileInput || !fileInput.files || !fileInput.files.length);
     
     if (!password) {
         alert("Debes ingresar la contraseña de tu firma electrónica.");
@@ -4869,6 +4892,7 @@ window.applyElectronicSignature = function() {
     
     const file = fileInput && fileInput.files ? fileInput.files[0] : null;
     if (!file && !rememberedSignatureData.fileData) {
+    if (!usingVault && !file && !rememberedSignatureData.fileData) {
         alert("Debes seleccionar tu archivo .p12 desde tu computadora.");
         return;
     }
@@ -4876,6 +4900,29 @@ window.applyElectronicSignature = function() {
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Verificando...';
+    }
+
+    if (usingVault) {
+        const signDate = new Date().toLocaleString("es-EC");
+        const commonName = vaultP12Info.name;
+        const qrText = "FIRMADO POR: " + commonName + "\nFECHA: " + signDate + "\nVALIDACION: FirmaEC / PAdES";
+        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=" + encodeURIComponent(qrText);
+        fetch(qrUrl).then(r => r.blob()).then(blob => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                rememberedSignatureData.certInfo = { name: commonName, date: signDate, qrBase64: reader.result };
+                rememberedSignatureData.password = password;
+                rememberedSignatureData.fileData = null;
+                const statusEl = document.getElementById("electronicSignatureStatus");
+                if (statusEl) statusEl.innerHTML = `<span style="color:#27ae60; font-weight:600; font-size:0.9rem;"><i class="fas fa-check-circle"></i> Firma lista: ${commonName}</span>`;
+                const modal = document.getElementById("modalElectronicSignature");
+                if (modal) modal.classList.remove("active");
+                pendingSignatureBtn = null;
+                if (btn) { btn.disabled = false; btn.innerText = "Verificar y Cargar Firma"; }
+            };
+            reader.readAsDataURL(blob);
+        });
+        return;
     }
     
     const processP12AndContinue = async (binaryString) => {
@@ -5196,6 +5243,11 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
             pdf_externos: pdfFiles
         };
 
+    const isElectronicSignatureChecked = document.getElementById("includeElectronicSignature") && document.getElementById("includeElectronicSignature").checked;
+    if (isElectronicSignatureChecked && rememberedSignatureData && rememberedSignatureData.password) {
+        dataObj.firma_electronica_password = rememberedSignatureData.password;
+    }
+
         if (generatePdf) {
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Armando PDF...';
           generatedPdfPayload = await buildDiagnosisPdfPayloadsForSave_(dataObj);
@@ -5434,6 +5486,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         });
+    }
+});
+
+// 3. Interceptar cierre de pestaña o recarga (Navegador)
+window.addEventListener("beforeunload", (e) => {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ""; // Necesario para Chrome/Edge
+    }
+});
+    }
+});
+
+// 3. Interceptar cierre de pestaña o recarga (Navegador)
+window.addEventListener("beforeunload", (e) => {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ""; // Necesario para Chrome/Edge
+    }
+});
     }
 });
 

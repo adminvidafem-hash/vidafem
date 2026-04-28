@@ -96,6 +96,13 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSearch();
 });
 
+function getAdminWorkerApiUrl_() {
+    const runtime = window.VF_API_RUNTIME || {};
+    const urls = window.VF_API_URLS || {};
+    const env = String(runtime.env || "prod").trim().toLowerCase() === "test" ? "test" : "prod";
+    return (urls.worker && urls.worker[env]) ? urls.worker[env] : API_URL;
+}
+
 // ============================
 // 1. UTILIDADES Y CÁLCULOS
 // ============================
@@ -1225,7 +1232,7 @@ function loadDoctorSignatureStatus() {
   const requester = getRequesterFromSession();
   if (!requester) return;
 
-  postApiWithSession_({ action: "get_p12_status", requester: requester })
+  postApiWithSession_({ action: "get_p12_status", requester: requester }, getAdminWorkerApiUrl_())
   .then((res) => {
       const box = document.getElementById("doctorSignatureStatusBox");
       if (!box) return;
@@ -1257,15 +1264,41 @@ window.handleP12Upload = function(input) {
   const file = input.files && input.files[0];
   if (!file) return;
 
+  const password = prompt("Seguridad de Bóveda:\nPor favor ingresa la contraseña de tu archivo .p12 para verificarlo antes de subirlo:");
+  if (!password) {
+      input.value = "";
+      return;
+  }
+
   const reader = new FileReader();
   reader.onload = function(e) {
-      const dataUrl = e.target.result;
+      const arrayBuffer = e.target.result;
+      const bytes = new Uint8Array(arrayBuffer);
+      let binaryStr = "";
+      for (let i = 0; i < bytes.length; i++) binaryStr += String.fromCharCode(bytes[i]);
+
+      let commonName = "Profesional Médico";
+      try {
+          const p12Asn1 = forge.asn1.fromDer(binaryStr);
+          const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, password);
+          const certBags = p12.getBags({bagType: forge.pki.oids.certBag})[forge.pki.oids.certBag];
+          const cert = certBags[0].cert;
+          const subject = cert.subject.attributes.find(a => a.shortName === 'CN' || a.name === 'commonName');
+          if (subject) commonName = subject.value;
+      } catch(err) {
+          alert("Contraseña incorrecta o archivo .p12 inválido. No se subió a la bóveda.");
+          input.value = "";
+          return;
+      }
+
+      const base64 = btoa(binaryStr);
+      const dataUrl = "data:application/x-pkcs12;base64," + base64;
       const requester = getRequesterFromSession();
       
       const box = document.getElementById("doctorSignatureStatusBox");
       if (box) box.innerHTML = '<div style="padding:12px;"><i class="fas fa-spinner fa-spin"></i> Subiendo a la bóveda segura...</div>';
 
-      postApiWithSession_({ action: "upload_p12", p12_data_url: dataUrl, requester: requester })
+      postApiWithSession_({ action: "upload_p12", p12_data_url: dataUrl, cert_name: commonName, requester: requester }, getAdminWorkerApiUrl_())
       .then(res => {
           if (res.success) {
               if (window.showToast) window.showToast("Firma guardada exitosamente.", "success");
@@ -1294,7 +1327,7 @@ window.deleteDoctorSignature = async function() {
   if (!ok) return;
 
   const requester = getRequesterFromSession();
-  postApiWithSession_({ action: "delete_p12", requester: requester })
+  postApiWithSession_({ action: "delete_p12", requester: requester }, getAdminWorkerApiUrl_())
   .then(res => {
       if (res.success) {
           if (window.showToast) window.showToast("Firma eliminada de la bóveda.", "success");

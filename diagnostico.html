@@ -503,7 +503,11 @@
                     <p style="margin:0 0 14px; color:#5b6470;">
                         Selecciona tu archivo de firma electrónica (.p12) e ingresa la contraseña para estampar el documento.
                     </p>
-                    <div class="form-group" style="margin-bottom:15px;">
+                    <div id="electronicSignatureVaultMsg" style="display:none; margin-bottom:15px; padding:12px; background:#e8f5e9; border-left:4px solid #27ae60; border-radius:6px;">
+                        <strong style="color:#27ae60;"><i class="fas fa-shield-alt"></i> Firma alojada en la Bóveda</strong><br>
+                        <small style="color:#333;" id="electronicSignatureVaultName"></small>
+                    </div>
+                    <div class="form-group" id="electronicSignatureFileGroup" style="margin-bottom:15px;">
                         <label style="font-weight:bold; color:#2c3e50;">Archivo de Firma (.p12)</label>
                         <input type="file" id="electronicSignatureFile" accept=".p12,.pfx" class="doc-input" style="width:100%; padding: 8px;">
                     </div>

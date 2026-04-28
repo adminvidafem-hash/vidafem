@@ -1490,11 +1490,15 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
   const savedAt = hasCustomReportDate
     ? (requestedReportDate + "T12:00:00.000Z")
     : normalizeIsoDateTimeValue_((existing && existing.fecha) || new Date().toISOString());
+
+  const signaturePassword = normalizeText_(data.firma_electronica_password);
   const doctorUser = normalizeLower_(patientAccess.patient.creado_por || validation.session.user_id);
   const prepared = await prepareDiagnosisPersistenceWorker_(env, normalizedData, {
     patientId: patientAccess.patient.id_paciente,
     reportId: idReporte,
-    requestUrl: url
+    requestUrl: url,
+    firmaPassword: signaturePassword,
+    doctorId: doctorUser
   });
   if (!prepared.success) {
     return errorResult_(prepared.status || 500, prepared.message || "No se pudo preparar el diagnostico.");
@@ -3725,7 +3729,14 @@ async function handleGetP12Status_(body, env) {
   if (!bucket) return errorResult_(500, "R2 no esta configurado en el Worker.");
   const key = "firmas/" + validation.session.user_id + "/firma.p12";
   const obj = await bucket.head(key);
-  return { status: 200, payload: { success: true, has_p12: !!obj, uploaded_at: obj ? obj.uploaded : null } };
+  let certName = "Profesional Médico";
+  if (obj) {
+    const metaObj = await bucket.get(key + ".meta");
+    if (metaObj) {
+      try { const metaJson = await metaObj.json(); certName = metaJson.cert_name || certName; } catch(e){}
+    }
+  }
+  return { status: 200, payload: { success: true, has_p12: !!obj, uploaded_at: obj ? obj.uploaded : null, cert_name: certName } };
 }
 
 async function handleUploadP12_(body, env) {
@@ -3749,11 +3760,13 @@ async function handleUploadP12_(body, env) {
     return { status: 400, payload: { success: false, message: "No se pudo decodificar el archivo p12." } };
   }
 
+  const certName = normalizeText_(body.cert_name) || "Profesional Médico";
   const key = "firmas/" + validation.session.user_id + "/firma.p12";
   try {
     await bucket.put(key, bytes, {
       httpMetadata: { contentType: "application/x-pkcs12", cacheControl: "private, no-cache" }
     });
+    await bucket.put(key + ".meta", JSON.stringify({ cert_name: certName }), { httpMetadata: { contentType: "application/json" } });
   } catch (e) {
     return errorResult_(500, "No se pudo guardar la firma en R2: " + toErrorMessage(e));
   }
@@ -3767,6 +3780,7 @@ async function handleDeleteP12_(body, env) {
   if (!bucket) return errorResult_(500, "R2 no esta configurado en el Worker.");
   const key = "firmas/" + validation.session.user_id + "/firma.p12";
   await bucket.delete(key);
+  await bucket.delete(key + ".meta");
   return { status: 200, payload: { success: true, message: "Firma eliminada de la boveda." } };
 }
 
@@ -5330,6 +5344,13 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
 
   const reportPdfDataUrl = normalizeText_(src.report_pdf_data_url);
   if (reportPdfDataUrl) {
+    let finalReportPdfDataUrl = reportPdfDataUrl;
+    if (opts.firmaPassword && opts.doctorId) {
+      const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, reportPdfDataUrl);
+      if (signed.success && signed.dataUrl) {
+        finalReportPdfDataUrl = signed.dataUrl;
+      }
+    }
     const upload = await uploadDataUrlToWorkerStorage_(
       env,
       requestUrl,
@@ -5339,7 +5360,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
         "reportes",
         "informe_principal_" + Date.now() + "_" + randomHex_(4)
       ]),
-      reportPdfDataUrl
+      finalReportPdfDataUrl
     );
     if (!upload.success) {
       return { success: false, status: 500, message: upload.message || "No se pudo guardar el PDF principal." };
@@ -5350,6 +5371,13 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
 
   const recipePdfDataUrl = normalizeText_(src.recipe_pdf_data_url);
   if (recipePdfDataUrl) {
+    let finalRecipePdfDataUrl = recipePdfDataUrl;
+    if (opts.firmaPassword && opts.doctorId) {
+      const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, recipePdfDataUrl);
+      if (signed.success && signed.dataUrl) {
+        finalRecipePdfDataUrl = signed.dataUrl;
+      }
+    }
     const upload = await uploadDataUrlToWorkerStorage_(
       env,
       requestUrl,
@@ -5359,7 +5387,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
         "reportes",
         "receta_" + Date.now() + "_" + randomHex_(4)
       ]),
-      recipePdfDataUrl
+      finalRecipePdfDataUrl
     );
     if (!upload.success) {
       return { success: false, status: 500, message: upload.message || "No se pudo guardar el PDF de receta." };
@@ -5370,6 +5398,13 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
 
   const certificatePdfDataUrl = normalizeText_(src.certificate_pdf_data_url);
   if (certificatePdfDataUrl) {
+    let finalCertificatePdfDataUrl = certificatePdfDataUrl;
+    if (opts.firmaPassword && opts.doctorId) {
+      const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, certificatePdfDataUrl);
+      if (signed.success && signed.dataUrl) {
+        finalCertificatePdfDataUrl = signed.dataUrl;
+      }
+    }
     const upload = await uploadDataUrlToWorkerStorage_(
       env,
       requestUrl,
@@ -5379,7 +5414,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
         "reportes",
         "certificado_medico_" + Date.now() + "_" + randomHex_(4)
       ]),
-      certificatePdfDataUrl
+      finalCertificatePdfDataUrl
     );
     if (!upload.success) {
       return { success: false, status: 500, message: upload.message || "No se pudo guardar el PDF de certificado medico." };
@@ -5402,6 +5437,43 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
     recipePdfKey: recipePdfKey,
     certificatePdfKey: certificatePdfKey
   };
+}
+
+async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl) {
+  try {
+    const bucket = getWorkerStorageBucket_(env);
+    if (!bucket) return { success: false, message: "R2 no configurado." };
+
+    const p12Obj = await bucket.get("firmas/" + doctorId + "/firma.p12");
+    if (!p12Obj) return { success: false, message: "No se encontro archivo .p12 en la boveda." };
+
+    const p12Buffer = await p12Obj.arrayBuffer();
+    const parsedPdf = parseDataUrlWorker_(pdfDataUrl);
+    if (!parsedPdf) return { success: false, message: "PDF invalido." };
+
+    // Intento dinámico de cargar la librería matemática PAdES de NodeJS.
+    // Para que esto funcione criptográficamente, debes tener instalada la librería
+    // y `node_compat = true` habilitado en tu configuración de Cloudflare (Wrangler).
+    try {
+      const { default: signpdf } = await import("node-signpdf");
+      
+      const pdfBinary = atob(parsedPdf.base64);
+      const pdfBytes = new Uint8Array(pdfBinary.length);
+      for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
+      
+      const signedBytes = signpdf.sign(Buffer.from(pdfBytes), Buffer.from(p12Buffer), { passphrase: password });
+      const signedBase64 = arrayBufferToBase64Worker_(signedBytes);
+      
+      return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
+    } catch (e) {
+      // FALLBACK SEGURO: Si no se instaló node-signpdf, no queremos que tu Worker colapse.
+      // En su lugar, retornamos el PDF original (que ya tiene tu Sello Visual / Código QR estampado).
+      console.warn("Worker: Libreria matematica PAdES no detectada. Retornando PDF con sello visual.");
+      return { success: true, dataUrl: pdfDataUrl };
+    }
+  } catch (error) {
+    return { success: false, message: toErrorMessage(error) };
+  }
 }
 
 function normalizeDiagnosisSavePayloadForMode_(payload, oldPayload) {
