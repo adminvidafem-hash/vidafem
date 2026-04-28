@@ -3363,18 +3363,12 @@ async function saveCommon(tipo, generarPdf, btnClicked, getDataFn) {
 
   // 1. ABRIR VENTANA DE CARGA (Anti-Bloqueo)
   if (generarPdf) {
-      if (window.globalPdfWindow && !window.globalPdfWindow.closed) {
-          pdfWindow = window.globalPdfWindow;
-          pdfWindow.document.body.innerHTML = "<div style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></div>";
-          window.globalPdfWindow = null;
+      pdfWindow = window.open("", "_blank");
+      if (pdfWindow) {
+          pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></body></html>");
       } else {
-          pdfWindow = window.open("", "_blank");
-          if (pdfWindow) {
-              pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Generando Documento...</h2><p>Procesando solicitud...</p></body></html>");
-          } else {
-              alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
-              return; // Cancelar si está bloqueado
-          }
+          alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
+          return; // Cancelar si está bloqueado
       }
   }
 
@@ -4730,30 +4724,15 @@ document.addEventListener("DOMContentLoaded", function() {
  setCurrentExternalPdfItems_([]);
 });
 // --- FUNCIÓN MAESTRA DE GUARDADO (Poner al final de diagnostico.js) ---
-window.globalPdfWindow = null;
 
 function handleMasterSave(generatePdf, btn) {
     const isElectronicSignatureChecked = document.getElementById("includeElectronicSignature") && document.getElementById("includeElectronicSignature").checked;
     
     if (isElectronicSignatureChecked && generatePdf) {
-        window.globalPdfWindow = window.open("", "_blank");
-        if (window.globalPdfWindow) {
-            window.globalPdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Preparando documento...</h2><p>Por favor espere, ingrese su clave de firma electrónica...</p></body></html>");
-        } else {
-            alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
-            return;
-        }
-        openElectronicSignatureModal(btn);
-        return; // Pausamos el flujo aquí hasta que ponga la clave en el modal
-    }
-    
-    if (generatePdf) {
-        window.globalPdfWindow = window.open("", "_blank");
-        if (window.globalPdfWindow) {
-            window.globalPdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif;'><h2>⏳ Inicializando...</h2><p>Procesando solicitud...</p></body></html>");
-        } else {
-            alert("⚠️ Habilite las ventanas emergentes para ver el PDF.");
-            return;
+        if (!rememberedSignatureData || !rememberedSignatureData.certInfo) {
+            alert("⚠️ Debes cargar y verificar tu firma electrónica antes de generar el documento.");
+            openElectronicSignatureModal(null);
+            return; // Detenemos para que cargue la firma primero
         }
     }
 
@@ -4810,6 +4789,20 @@ window.toggleElectronicSignaturePassword = function() {
     }
 };
 
+window.handleSignatureCheckboxChange = function(cb) {
+    const statusEl = document.getElementById("electronicSignatureStatus");
+    if (cb.checked) {
+        if (!rememberedSignatureData.certInfo) {
+            openElectronicSignatureModal(null);
+        } else if (statusEl) {
+            statusEl.innerHTML = `<span style="color:#27ae60; font-weight:600; font-size:0.9rem;"><i class="fas fa-check-circle"></i> Firma lista: ${rememberedSignatureData.certInfo.name}</span>`;
+        }
+    } else {
+        if (statusEl) statusEl.innerHTML = "";
+        rememberedSignatureData = { fileData: null, password: "", certInfo: null };
+    }
+};
+
 window.openElectronicSignatureModal = function(btn) {
     pendingSignatureBtn = btn;
     const modal = document.getElementById("modalElectronicSignature");
@@ -4827,9 +4820,10 @@ window.closeElectronicSignatureModal = function() {
     const modal = document.getElementById("modalElectronicSignature");
     if (modal) modal.classList.remove("active");
     pendingSignatureBtn = null;
-    if (window.globalPdfWindow) {
-        window.globalPdfWindow.close();
-        window.globalPdfWindow = null;
+    
+    if (!rememberedSignatureData.certInfo) {
+        const cb = document.getElementById("includeElectronicSignature");
+        if (cb) cb.checked = false;
     }
 };
 
@@ -4869,29 +4863,23 @@ window.applyElectronicSignature = function() {
                 date: new Date().toLocaleString("es-EC") 
             };
             
-            if (remember) {
-                rememberedSignatureData.password = password;
-                rememberedSignatureData.fileData = binaryString;
-            } else {
-                rememberedSignatureData = { fileData: null, password: "", certInfo: rememberedSignatureData.certInfo };
-                if (fileInput) fileInput.value = "";
-            }
+            rememberedSignatureData.password = password;
+            rememberedSignatureData.fileData = binaryString;
+            if (!remember && fileInput) fileInput.value = "";
             
+            const statusEl = document.getElementById("electronicSignatureStatus");
+            if (statusEl) {
+                statusEl.innerHTML = `<span style="color:#27ae60; font-weight:600; font-size:0.9rem;"><i class="fas fa-check-circle"></i> Firma verificada y lista: ${commonName}</span>`;
+            }
+
             const modal = document.getElementById("modalElectronicSignature");
             if (modal) modal.classList.remove("active");
             pendingSignatureBtn = null;
             
-            // 3. Continuar con el guardado maestro
-            if (pendingSignatureBtn) {
-                executeMasterSaveFlow(true, pendingSignatureBtn);
-            }
+            alert("✅ Firma electrónica verificada correctamente. Ya puedes continuar con tu diagnóstico.");
             
         } catch (err) {
             console.error("Error desencriptando .p12:", err);
-            if (window.globalPdfWindow) {
-                window.globalPdfWindow.close();
-                window.globalPdfWindow = null;
-            }
             alert("Contraseña incorrecta o archivo .p12 inválido/corrupto.");
         }
     };
@@ -5050,18 +5038,12 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
 
     // 2. ABRIR VENTANA DE CARGA (Anti-Bloqueo)
     if (generatePdf) {
-        if (window.globalPdfWindow && !window.globalPdfWindow.closed) {
-            pdfWindow = window.globalPdfWindow;
-            pdfWindow.document.body.innerHTML = "<div style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></div>";
-            window.globalPdfWindow = null;
+        pdfWindow = window.open("", "_blank");
+        if (pdfWindow) {
+            pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></body></html>");
         } else {
-            pdfWindow = window.open("", "_blank");
-            if (pdfWindow) {
-                pdfWindow.document.write("<html><body style='text-align:center; padding:50px; font-family:sans-serif; background:#f4f4f9;'><h2>⏳ Generando Informe...</h2><p>Por favor espere, estamos procesando las imágenes y creando su PDF.</p></body></html>");
-            } else {
-                alert("⚠️ El navegador bloqueó la ventana emergente. Por favor permita pop-ups para este sitio.");
-                return; // Cancelar si no se puede abrir la ventana
-            }
+            alert("⚠️ El navegador bloqueó la ventana emergente. Por favor permita pop-ups para este sitio.");
+            return; // Cancelar si no se puede abrir la ventana
         }
     }
     
