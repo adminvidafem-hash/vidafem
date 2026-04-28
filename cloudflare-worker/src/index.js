@@ -1152,9 +1152,7 @@ async function handleGetServiceConfig_(body, env) {
   });
 
   const configRes = await supabaseRest_(env, "get", "config_campos", {
-    select: "servicio,campo_nombre,campo_etiqueta,campo_tipo,opciones",
-    orderBy: "servicio",
-    ascending: true
+    select: "servicio,campo_nombre,campo_etiqueta,campo_tipo,opciones"
   });
   if (!configRes.success) {
     return errorResult_(500, configRes.message || "No se pudo cargar la configuracion de campos.");
@@ -4779,13 +4777,29 @@ function buildServiceConfigMapWorker_(rows, allowedServices) {
     if (!serviceName) return;
     if (allowed && !allowed[serviceName]) return;
     if (!map[serviceName]) map[serviceName] = [];
+    
+    let opcionesStr = normalizeText_(row && row.opciones);
+    let orden = 9999;
+    const match = opcionesStr.match(/\|\|ORDEN:(\d+)$/);
+    if (match) {
+      orden = parseInt(match[1], 10);
+      opcionesStr = opcionesStr.replace(/\|\|ORDEN:\d+$/, "");
+    }
+    
     map[serviceName].push({
       nombre: normalizeText_(row && row.campo_nombre),
       etiqueta: normalizeText_(row && row.campo_etiqueta),
       tipo: normalizeLower_(row && row.campo_tipo),
-      opciones: normalizeText_(row && row.opciones)
+      opciones: opcionesStr,
+      _orden: orden
     });
   });
+  
+  for (const srv in map) {
+    map[srv].sort(function(a, b) { return a._orden - b._orden; });
+    map[srv].forEach(function(item) { delete item._orden; });
+  }
+  
   return map;
 }
 
@@ -4799,16 +4813,29 @@ async function loadServiceConfigRowsForService_(env, serviceName) {
   });
   if (!res.success || !Array.isArray(res.data)) return [];
 
-  return res.data.map(function(row) {
+  const items = res.data.map(function(row) {
+    let opcionesStr = normalizeText_(row && row.opciones);
+    let orden = 9999;
+    const match = opcionesStr.match(/\|\|ORDEN:(\d+)$/);
+    if (match) {
+      orden = parseInt(match[1], 10);
+      opcionesStr = opcionesStr.replace(/\|\|ORDEN:\d+$/, "");
+    }
+    
     return {
       nombre: normalizeText_(row && row.campo_nombre),
       etiqueta: normalizeText_(row && row.campo_etiqueta),
       tipo: normalizeLower_(row && row.campo_tipo),
-      opciones: normalizeText_(row && row.opciones)
+      opciones: opcionesStr,
+      _orden: orden
     };
   }).filter(function(row) {
     return !!(row.nombre || row.etiqueta || row.tipo);
   });
+  
+  items.sort(function(a, b) { return a._orden - b._orden; });
+  items.forEach(function(item) { delete item._orden; });
+  return items;
 }
 
 async function findServiceByNameInsensitive_(env, serviceName) {
@@ -4836,14 +4863,17 @@ function normalizeServiceScopeWorker_(value) {
 
 function normalizeServiceFieldRowsWorker_(campos, serviceName) {
   const targetService = normalizeText_(serviceName);
-  return (Array.isArray(campos) ? campos : []).map(function(campo) {
+  return (Array.isArray(campos) ? campos : []).map(function(campo, index) {
     const item = campo && typeof campo === "object" ? campo : {};
+    let opcionesStr = normalizeText_(item.opciones);
+    opcionesStr = opcionesStr ? (opcionesStr + "||ORDEN:" + index) : ("||ORDEN:" + index);
+    
     return {
       servicio: targetService,
       campo_nombre: normalizeText_(item.nombre),
       campo_etiqueta: normalizeText_(item.etiqueta),
       campo_tipo: normalizeLower_(item.tipo),
-      opciones: normalizeText_(item.opciones)
+      opciones: opcionesStr
     };
   }).filter(function(item) {
     return !!targetService && !!item.campo_etiqueta;
