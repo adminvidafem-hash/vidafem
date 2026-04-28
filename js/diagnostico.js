@@ -2086,29 +2086,32 @@ async function buildDiagnosisPdfPayloadsForSave_(payload) {
   const shouldBuildReport = !isRecipeOnly && !isExternalPdfOnly && !isCertificateOnly && hasMeaningfulClinicalPdfContent_(data);
 
   if (shouldBuildReport) {
-    const reportPdf = await withDiagnosisTimeout_(
+    let reportPdf = await withDiagnosisTimeout_(
       buildDiagnosisReportPdfDataUrl_(data),
       30000,
       "La generación del PDF del informe tardó demasiado."
     );
+    if (reportPdf && typeof applyElectronicSignatureToPdf_ === 'function') reportPdf = await applyElectronicSignatureToPdf_(reportPdf);
     if (reportPdf) out.report_pdf_data_url = reportPdf;
   }
 
   if (hasMeaningfulRecipeContent_(data)) {
-    const recipePdf = await withDiagnosisTimeout_(
+    let recipePdf = await withDiagnosisTimeout_(
       buildDiagnosisRecipePdfDataUrl_(data),
       30000,
       "La generación del PDF de receta tardó demasiado."
     );
+    if (recipePdf && typeof applyElectronicSignatureToPdf_ === 'function') recipePdf = await applyElectronicSignatureToPdf_(recipePdf);
     if (recipePdf) out.recipe_pdf_data_url = recipePdf;
   }
 
   if (isCertificateOnly || hasMeaningfulMedicalCertificateContent_(data)) {
-    const certPdf = await withDiagnosisTimeout_(
+    let certPdf = await withDiagnosisTimeout_(
       buildDiagnosisMedicalCertificatePdfDataUrl_(data),
       30000,
       "La generación del PDF del certificado tardó demasiado."
     );
+    if (certPdf && typeof applyElectronicSignatureToPdf_ === 'function') certPdf = await applyElectronicSignatureToPdf_(certPdf);
     if (certPdf) out.certificate_pdf_data_url = certPdf;
     if (isCertificateOnly && !certPdf) {
       throw new Error("No se pudo generar el PDF del certificado medico. Verifica los datos e intenta de nuevo.");
@@ -2121,11 +2124,12 @@ async function buildDiagnosisPdfPayloadsForSave_(payload) {
 async function buildDiagnosisCertificatePdfPayloadForSave_(payload) {
   const data = payload || {};
   if (!hasMeaningfulMedicalCertificateContent_(data)) return {};
-  const certPdf = await withDiagnosisTimeout_(
+  let certPdf = await withDiagnosisTimeout_(
     buildDiagnosisMedicalCertificatePdfDataUrl_(data),
     30000,
     "La generación del PDF del certificado tardó demasiado."
   );
+  if (certPdf && typeof applyElectronicSignatureToPdf_ === 'function') certPdf = await applyElectronicSignatureToPdf_(certPdf);
   return certPdf ? { certificate_pdf_data_url: certPdf } : {};
 }
 
@@ -4717,7 +4721,7 @@ function executeMasterSaveFlow(generatePdf, btn) {
 // 7. LÓGICA DE FIRMA ELECTRÓNICA (CAPA VISUAL)
 // ==========================================
 let pendingSignatureBtn = null;
-let rememberedSignatureData = { fileData: null, password: "" };
+let rememberedSignatureData = { fileData: null, password: "", certInfo: null };
 
 window.openElectronicSignatureModal = function(btn) {
     pendingSignatureBtn = btn;
@@ -4741,25 +4745,130 @@ window.closeElectronicSignatureModal = function() {
 window.applyElectronicSignature = function() {
     const password = document.getElementById("electronicSignaturePassword").value;
     const remember = document.getElementById("rememberElectronicSignature").checked;
+    const fileInput = document.getElementById("electronicSignatureFile");
     
     if (!password) {
         alert("Debes ingresar la contraseña de tu firma electrónica.");
         return;
     }
     
-    if (remember) {
-        rememberedSignatureData.password = password;
-    } else {
-        rememberedSignatureData = { fileData: null, password: "" };
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    if (!file && !rememberedSignatureData.fileData) {
+        alert("Debes seleccionar tu archivo .p12 desde tu computadora.");
+        return;
     }
     
-    closeElectronicSignatureModal();
+    const processP12AndContinue = (arrayBuffer) => {
+        try {
+            // 1. Desencriptar y validar el .p12 con node-forge
+            const p12Asn1 = forge.asn1.fromDer(forge.util.createBuffer(new Uint8Array(arrayBuffer)));
+            const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, password);
+            
+            // 2. Extraer el certificado y el Nombre del Profesional
+            const certBags = p12.getBags({bagType: forge.pki.oids.certBag})[forge.pki.oids.certBag];
+            if (!certBags || certBags.length === 0) throw new Error("Certificado no encontrado en el archivo.");
+            
+            const cert = certBags[0].cert;
+            const subject = cert.subject.attributes.find(a => a.shortName === 'CN' || a.name === 'commonName');
+            const commonName = subject ? subject.value : "Profesional Médico";
+            
+            // Guardamos la info extraída
+            rememberedSignatureData.certInfo = { 
+                name: commonName, 
+                date: new Date().toLocaleString("es-EC") 
+            };
+            
+            if (remember) {
+                rememberedSignatureData.password = password;
+                rememberedSignatureData.fileData = arrayBuffer;
+            } else {
+                rememberedSignatureData = { fileData: null, password: "", certInfo: rememberedSignatureData.certInfo };
+                if (fileInput) fileInput.value = "";
+            }
+            
+            closeElectronicSignatureModal();
+            
+            // 3. Continuar con el guardado maestro
+            if (pendingSignatureBtn) {
+                executeMasterSaveFlow(true, pendingSignatureBtn);
+            }
+            
+        } catch (err) {
+            console.error("Error desencriptando .p12:", err);
+            alert("Contraseña incorrecta o archivo .p12 inválido/corrupto.");
+        }
+    };
     
-    // Reanudamos el flujo maestro de guardado (Por ahora simula el paso sin firmar criptográficamente)
-    if (pendingSignatureBtn) {
-        executeMasterSaveFlow(true, pendingSignatureBtn);
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            processP12AndContinue(e.target.result);
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        processP12AndContinue(rememberedSignatureData.fileData);
     }
 };
+
+// Función que estampa el sello visual inalterable en el PDF usando pdf-lib
+async function applyElectronicSignatureToPdf_(dataUrl) {
+    const checkbox = document.getElementById("includeElectronicSignature");
+    if (!checkbox || !checkbox.checked || !rememberedSignatureData.certInfo) return dataUrl;
+    if (!window.PDFLib) return dataUrl;
+
+    try {
+        const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+        const parts = dataUrl.split(',');
+        const binary = atob(parts[1]);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        const pdfDoc = await PDFDocument.load(bytes);
+        const pages = pdfDoc.getPages();
+        const lastPage = pages[pages.length - 1];
+
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        
+        const certName = rememberedSignatureData.certInfo.name;
+        const signDate = rememberedSignatureData.certInfo.date;
+
+        // Dibujar la caja del sello en la parte inferior izquierda
+        const boxWidth = 190;
+        const boxHeight = 45;
+        const marginX = 14; 
+        const marginY = 14; 
+
+        lastPage.drawRectangle({
+            x: marginX,
+            y: marginY,
+            width: boxWidth,
+            height: boxHeight,
+            borderColor: rgb(0.16, 0.5, 0.72),
+            borderWidth: 1.2,
+            color: rgb(0.96, 0.98, 1),
+            opacity: 0.9
+        });
+
+        lastPage.drawText("FIRMADO ELECTRÓNICAMENTE POR:", {
+            x: marginX + 10, y: marginY + 28, size: 8, font: fontBold, color: rgb(0.16, 0.5, 0.72)
+        });
+        lastPage.drawText(certName, {
+            x: marginX + 10, y: marginY + 16, size: 10, font: fontBold, color: rgb(0.1, 0.1, 0.1)
+        });
+        lastPage.drawText(`Fecha: ${signDate}`, {
+            x: marginX + 10, y: marginY + 6, size: 8, font: fontRegular, color: rgb(0.3, 0.3, 0.3)
+        });
+
+        const pdfBytes = await pdfDoc.save();
+        let binaryStr = "";
+        for (let i = 0; i < pdfBytes.length; i++) binaryStr += String.fromCharCode(pdfBytes[i]);
+        return "data:application/pdf;base64," + btoa(binaryStr);
+    } catch (e) {
+        console.error("Error estampando la firma electrónica visual:", e);
+        return dataUrl;
+    }
+}
 
 // Auxiliar para leer la receta
 function getUniversalRecipeData() {
