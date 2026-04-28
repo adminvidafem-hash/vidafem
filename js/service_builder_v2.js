@@ -289,6 +289,19 @@
     var typeVal = tipo || "texto";
     var optionsVal = opciones || "";
 
+    var thVal = "EXAMEN, RESULTADO, UNIDAD, V. REFERENCIA";
+    var toVal = "DETECTADO, NO DETECTADO";
+    var trVal = "";
+    var normalOptionsVal = optionsVal;
+
+    if (typeVal === "tabla_resultados" && optionsVal) {
+      var parts = optionsVal.split("|||");
+      thVal = parts[0] ? parts[0].trim() : thVal;
+      toVal = parts[1] ? parts[1].trim() : toVal;
+      trVal = parts[2] ? parts[2].trim() : trVal;
+      normalOptionsVal = "";
+    }
+
     row.innerHTML =
       '<div class="sbv2-field-actions">' +
       '<button type="button" class="sbv2-btn sbv2-btn-ghost" data-action="move-up" title="Mover arriba">' +
@@ -312,14 +325,22 @@
       optionHtml(typeVal) +
       "</select>" +
       "</div>" +
-      '<div class="sbv2-field-options">' +
+      '<div class="sbv2-field-options sbv2-options-normal" ' + (typeVal === "tabla_resultados" ? 'style="display:none;"' : '') + '>' +
       '<input type="text" class="sbv2-field-options-input" placeholder="Opciones separadas por coma" value="' +
-      escapeHtml(optionsVal) +
+      escapeHtml(normalOptionsVal) +
       '">' +
       "<small>* Escribe las opciones separadas por comas.</small>" +
+      "</div>" +
+      '<div class="sbv2-field-options sbv2-options-table" ' + (typeVal === "tabla_resultados" ? '' : 'style="display:none;"') + ' style="background:#f4f6f9; padding:12px; border-radius:8px; margin-top:8px;">' +
+      '<label style="font-size:0.8rem; font-weight:bold; color:#2c3e50; display:block; margin-bottom:4px;">Columnas (separadas por coma):</label>' +
+      '<input type="text" class="sbv2-table-headers sbv2-input" placeholder="Ej: EXAMEN, RESULTADO, UNIDAD, V. REFERENCIA" value="' + escapeHtml(thVal) + '" style="margin-bottom:10px;">' +
+      '<label style="font-size:0.8rem; font-weight:bold; color:#2c3e50; display:block; margin-bottom:4px;">Opciones de Resultado (separadas por coma):</label>' +
+      '<input type="text" class="sbv2-table-opts sbv2-input" placeholder="Ej: DETECTADO, NO DETECTADO" value="' + escapeHtml(toVal) + '" style="margin-bottom:10px;">' +
+      '<label style="font-size:0.8rem; font-weight:bold; color:#2c3e50; display:block; margin-bottom:4px;">Exámenes a evaluar (uno por línea o separados por coma):</label>' +
+      '<textarea class="sbv2-table-rows sbv2-textarea" placeholder="Ej: Herpes Simplex Virus-1, VIH, Sífilis" rows="3">' + escapeHtml(trVal) + '</textarea>' +
       "</div>";
 
-    if (typeVal === "select" || typeVal === "casillas_opciones") row.classList.add("sbv2-options-active");
+    if (typeVal === "select" || typeVal === "casillas_opciones" || typeVal === "tabla_resultados") row.classList.add("sbv2-options-active");
     els.fields.appendChild(row);
   }
 
@@ -331,6 +352,7 @@
       option("select", "Lista Desplegable", typeVal),
       option("casillas_opciones", "Casillas opciones", typeVal),
       option("imagenes", "Galería de fotos", typeVal),
+      option("tabla_resultados", "Panel de Resultados (Tabla)", typeVal),
       option("titulo", "-- Título de sección --", typeVal),
     ].join("");
   }
@@ -350,8 +372,20 @@
   function toggleOptions(select) {
     var row = select.closest(".sbv2-field-row");
     if (!row) return;
-    if (select.value === "select" || select.value === "casillas_opciones") row.classList.add("sbv2-options-active");
-    else row.classList.remove("sbv2-options-active");
+    var normalOpts = row.querySelector(".sbv2-options-normal");
+    var tableOpts = row.querySelector(".sbv2-options-table");
+
+    if (select.value === "tabla_resultados") {
+        row.classList.add("sbv2-options-active");
+        if (normalOpts) normalOpts.style.display = "none";
+        if (tableOpts) tableOpts.style.display = "block";
+    } else if (select.value === "select" || select.value === "casillas_opciones") {
+        row.classList.add("sbv2-options-active");
+        if (normalOpts) normalOpts.style.display = "block";
+        if (tableOpts) tableOpts.style.display = "none";
+    } else {
+        row.classList.remove("sbv2-options-active");
+    }
   }
 
   function renderPreview() {
@@ -388,6 +422,8 @@
           } else if (f.type === "imagenes") {
             valueHtml =
               '<div class="sbv2-field-images"><div></div><div></div><div></div></div>';
+          } else if (f.type === "tabla_resultados") {
+            valueHtml = '<div style="background:#f0f4f8; padding:10px; border-radius:4px; font-size:10px; border:1px dashed #cbd5e1; color:#64748b;">[ TABLA DE EXÁMENES ]</div>';
           } else {
             valueHtml = '<div class="sbv2-field-value-line"></div>';
           }
@@ -422,13 +458,23 @@
       var internalName = internalNameInput ? String(internalNameInput.value || "").trim() : "";
       var label = row.querySelector(".sbv2-field-label").value.trim();
       var type = row.querySelector(".sbv2-field-type").value;
-      var optionsRaw = row.querySelector(".sbv2-field-options-input").value || "";
-      var options = optionsRaw
-        .split(",")
-        .map(function (s) {
-          return s.trim();
-        })
-        .filter(Boolean);
+      var optionsRaw = "";
+
+      if (type === "tabla_resultados") {
+          var th = row.querySelector(".sbv2-table-headers").value || "EXAMEN, RESULTADO, UNIDAD, V. REFERENCIA";
+          var to = row.querySelector(".sbv2-table-opts").value || "DETECTADO, NO DETECTADO";
+          var tr = row.querySelector(".sbv2-table-rows").value || "";
+          optionsRaw = th + "|||" + to + "|||" + tr;
+      } else {
+          var normalInp = row.querySelector(".sbv2-field-options-input");
+          optionsRaw = normalInp ? normalInp.value : "";
+      }
+
+      var options = type === "tabla_resultados" 
+          ? [optionsRaw] 
+          : optionsRaw.split(",").map(function (s) {
+              return s.trim();
+            }).filter(Boolean);
 
       if (!label && type !== "titulo") return;
       list.push({

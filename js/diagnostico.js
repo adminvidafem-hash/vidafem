@@ -726,7 +726,7 @@ function diagnosisPdfValueToText_(value) {
   }
   if (typeof value === "object") {
     try {
-      return JSON.stringify(value);
+      return Object.entries(value).map(([k,v]) => `${k}: ${v}`).join(" | ");
     } catch (e) {
       return "";
     }
@@ -865,6 +865,35 @@ function renderDiagnosisTemplateEntryHtml_(entry) {
   const type = String((entry && entry.type) || "").trim().toLowerCase();
   const label = escapeHtmlDiagnosis_(String((entry && entry.label) || "").trim());
   if (!label) return "";
+
+  if (type === "tabla_resultados") {
+    const rows = Array.isArray(entry.value) ? entry.value : [];
+    if (!rows.length) return "";
+    
+    const headers = Object.keys(rows[0] || {});
+    if (!headers.length) return "";
+
+    let html = "<section style=\"margin:0 0 6mm 0; page-break-inside:avoid;\">"
+      + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1.5mm;\">" + label + "</div>"
+      + "<table style=\"width:100%; border-collapse:collapse; font-size:9pt; color:#222; border:1px solid #cbd5e1;\">"
+      + "<thead><tr style=\"background:#e2e8f0;\">";
+    
+    headers.forEach(h => {
+      html += "<th style=\"padding:2mm; border-bottom:1px solid #cbd5e1; border-right:1px solid #cbd5e1; text-align:left; color:#1e293b;\">" + escapeHtmlDiagnosis_(h) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+
+    rows.forEach(r => {
+      html += "<tr style=\"border-bottom:1px dotted #cbd5e1;\">";
+      headers.forEach(h => {
+        html += "<td style=\"padding:1.5mm 2mm; border-right:1px dotted #cbd5e1; vertical-align:top;\">" + escapeHtmlDiagnosis_(r[h]) + "</td>";
+      });
+      html += "</tr>";
+    });
+
+    html += "</tbody></table></section>";
+    return html;
+  }
 
   if (type === "select") {
     const selectedText = diagnosisValueToHtmlLines_(entry && entry.value);
@@ -1648,6 +1677,16 @@ function buildDiagnosisPdfFieldEntries_(payload) {
       const key = String((item && item.nombre) || "").trim();
       if (!key || type === "titulo" || type === "imagenes") return;
       used[key] = true;
+
+      if (type === "tabla_resultados") {
+        entries.push({
+          key: key,
+          label: String((item && item.etiqueta) || key).trim(),
+          value: dynamicData[key],
+          type: "tabla_resultados"
+        });
+        return;
+      }
 
       if (type === "casillas_opciones") {
         const selected = diagnosisNormalizeOptionValues_(dynamicData[key]);
@@ -4522,6 +4561,42 @@ function renderDynamicFields(nombreServicio, campos) {
             </div>
           `;
         }
+        else if (c.tipo === 'tabla_resultados') {
+            const parts = String(c.opciones || "").split("|||");
+            const headers = (parts[0] || "EXAMEN, RESULTADO, UNIDAD, V. REFERENCIA").split(",").map(s => s.trim());
+            const resultOpts = (parts[1] || "DETECTADO, NO DETECTADO").split(",").map(s => s.trim());
+            const exams = (parts[2] || "").split(/,|\n/).map(s => s.trim()).filter(Boolean);
+
+            let tableHtml = `<div class="dyn-table-group" data-field-key="${c.nombre}" style="overflow-x:auto; margin-top:5px; border:1px solid #ddd; border-radius:8px;">
+                <table style="width:100%; border-collapse: collapse; font-size:0.9rem; text-align:left; background:#fff;">
+                    <thead><tr style="background:#e2e8f0; color:#334155;">`;
+            
+            headers.forEach(h => {
+                tableHtml += `<th style="padding:10px; border-bottom:2px solid #cbd5e1;">${h}</th>`;
+            });
+            tableHtml += `</tr></thead><tbody>`;
+
+            exams.forEach((exam, idx) => {
+                tableHtml += `<tr style="border-bottom:1px solid #f1f5f9;">`;
+                headers.forEach((h, hIdx) => {
+                    const isResult = h.toUpperCase().includes("RESULTADO");
+                    if (hIdx === 0) {
+                        tableHtml += `<td style="padding:8px 10px;"><strong>${exam}</strong><input type="hidden" data-col="${h}" value="${exam}"></td>`;
+                    } else if (isResult) {
+                        let selOpts = `<option value="">-</option>`;
+                        resultOpts.forEach(ro => {
+                            selOpts += `<option value="${ro}">${ro}</option>`;
+                        });
+                        tableHtml += `<td style="padding:8px 10px;"><select class="table-input" data-col="${h}" style="padding:5px; width:100%; border:1px solid #ccc; border-radius:4px;">${selOpts}</select></td>`;
+                    } else {
+                        tableHtml += `<td style="padding:8px 10px;"><input type="text" class="table-input" data-col="${h}" style="padding:5px; width:100%; border:1px solid #ccc; border-radius:4px;"></td>`;
+                    }
+                });
+                tableHtml += `</tr>`;
+            });
+            tableHtml += `</tbody></table></div>`;
+            inputHtml = tableHtml;
+        }
         // --- NUEVO: NÚMEROS CON PLACEHOLDER "0" ---
         else if (c.tipo === 'numero') {
             inputHtml = `<input type="number" id="dyn_${c.nombre}" class="doc-input" placeholder="0">`;
@@ -4533,11 +4608,11 @@ function renderDynamicFields(nombreServicio, campos) {
             inputHtml = `<input type="text" id="dyn_${c.nombre}" class="doc-input">`;
         }
 
-        const colSpan = (c.tipo === 'parrafo' || c.tipo === 'imagenes') ? 'grid-column: 1 / -1;' : '';
+        const colSpan = (c.tipo === 'parrafo' || c.tipo === 'imagenes' || c.tipo === 'tabla_resultados') ? 'grid-column: 1 / -1;' : '';
         
         html += `
             <div style="${colSpan}">
-                 ${c.tipo !== 'imagenes' ? `<label style="font-weight:bold; font-size:0.9rem; color:#555; display:block; margin-bottom:5px;">${c.etiqueta}</label>` : ''}
+                 ${(c.tipo !== 'imagenes' && c.tipo !== 'tabla_resultados') ? `<label style="font-weight:bold; font-size:0.9rem; color:#555; display:block; margin-bottom:5px;">${c.etiqueta}</label>` : ''}
                 ${inputHtml}
             </div>
         `;
@@ -4789,6 +4864,24 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
             .map((cb) => String(cb.value || "").trim())
             .filter(Boolean);
           datosDinamicos[key] = selected;
+        });
+
+        // 1.c Recolectar tablas de resultados
+        const tables = document.querySelectorAll("#form-dinamico .dyn-table-group");
+        tables.forEach((table) => {
+            const key = table.getAttribute("data-field-key");
+            if (!key) return;
+            const rows = table.querySelectorAll("tbody tr");
+            const tableData = [];
+            rows.forEach((tr) => {
+                const rowData = {};
+                const elements = tr.querySelectorAll("input, select");
+                elements.forEach(el => {
+                    rowData[el.getAttribute("data-col")] = el.value;
+                });
+                tableData.push(rowData);
+            });
+            datosDinamicos[key] = tableData;
         });
 
         // 2. Imágenes (redimensionar según tamaño y slider de su galería)
