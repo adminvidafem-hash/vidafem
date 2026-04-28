@@ -70,7 +70,6 @@ function shouldForceWorkerForDiagnosisAction_(action) {
     || key === "delete_diagnosis_asset"
     || key === "delete_diagnosis"
     || key === "get_file_base64"
-    || key === "get_diagnosis_history";
     || key === "get_diagnosis_history"
     || key === "get_p12_status";
 }
@@ -4891,7 +4890,6 @@ window.applyElectronicSignature = function() {
     }
     
     const file = fileInput && fileInput.files ? fileInput.files[0] : null;
-    if (!file && !rememberedSignatureData.fileData) {
     if (!usingVault && !file && !rememberedSignatureData.fileData) {
         alert("Debes seleccionar tu archivo .p12 desde tu computadora.");
         return;
