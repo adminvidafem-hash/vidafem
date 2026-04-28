@@ -1264,10 +1264,10 @@ window.handleP12Upload = function(input) {
   const file = input.files && input.files[0];
   if (!file) return;
 
-  const certName = prompt("Para personalizar tu sello visual, ingresa el nombre del titular de esta firma (Ej: Dra. María López):", "Profesional Médico");
-  if (certName === null) {
-      input.value = "";
-      return;
+  const session = getSessionDataSafe();
+  let certName = "Profesional Médico";
+  if (session && session.data) {
+      certName = session.data.nombre_doctor || session.data.nombre || session.data.usuario || "Profesional Médico";
   }
 
   const reader = new FileReader();
