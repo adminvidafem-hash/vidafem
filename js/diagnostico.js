@@ -4748,6 +4748,20 @@ function executeMasterSaveFlow(generatePdf, btn) {
 let pendingSignatureBtn = null;
 let rememberedSignatureData = { fileData: null, password: "", certInfo: null };
 
+window.toggleElectronicSignaturePassword = function() {
+    const input = document.getElementById("electronicSignaturePassword");
+    const icon = document.getElementById("toggleSignaturePassword");
+    if (input && icon) {
+        if (input.type === "password") {
+            input.type = "text";
+            icon.classList.replace("fa-eye", "fa-eye-slash");
+        } else {
+            input.type = "password";
+            icon.classList.replace("fa-eye-slash", "fa-eye");
+        }
+    }
+};
+
 window.openElectronicSignatureModal = function(btn) {
     pendingSignatureBtn = btn;
     const modal = document.getElementById("modalElectronicSignature");
@@ -4809,7 +4823,7 @@ window.applyElectronicSignature = function() {
             
             if (remember) {
                 rememberedSignatureData.password = password;
-                rememberedSignatureData.fileData = arrayBuffer;
+                rememberedSignatureData.fileData = binaryString;
             } else {
                 rememberedSignatureData = { fileData: null, password: "", certInfo: rememberedSignatureData.certInfo };
                 if (fileInput) fileInput.value = "";
