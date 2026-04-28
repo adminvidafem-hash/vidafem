@@ -1,4 +1,4 @@
-﻿// js/admin.js - VIDAFEM v3.1 (CRUD Completo + Modularidad)
+﻿﻿// js/admin.js - VIDAFEM v3.1 (CRUD Completo + Modularidad)
 
 let allPatients = [];
 let isDeletingPatient = false;
@@ -89,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadDoctorVacationStatus();
   setupProfilePasswordForm();
   setupNavigation();
+  if (typeof loadDoctorSignatureStatus === "function") loadDoctorSignatureStatus();
   setupDashboardCardActions_();
   loadDashboardStats();
   loadAdminHomeInfographicPreview_();
@@ -1220,6 +1221,90 @@ function setupDoctorVacationForm() {
   }
 }
 
+function loadDoctorSignatureStatus() {
+  const requester = getRequesterFromSession();
+  if (!requester) return;
+
+  postApiWithSession_({ action: "get_p12_status", requester: requester })
+  .then((res) => {
+      const box = document.getElementById("doctorSignatureStatusBox");
+      if (!box) return;
+      if (res && res.success && res.has_p12) {
+          const date = new Date(res.uploaded_at).toLocaleString("es-EC");
+          box.innerHTML = `
+              <div style="background:#e8f5e9; border-left:4px solid #27ae60; padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                  <div>
+                      <strong style="color:#27ae60;"><i class="fas fa-check-circle"></i> Firma .p12 en Bóveda</strong><br>
+                      <small style="color:#666;">Subida el: ${date}</small>
+                  </div>
+                  <button type="button" onclick="deleteDoctorSignature()" style="background:none; border:none; color:#c0392b; cursor:pointer;" title="Eliminar">
+                      <i class="fas fa-trash"></i> Eliminar
+                  </button>
+              </div>
+          `;
+      } else {
+          box.innerHTML = `
+              <div style="background:#f8f9fa; border-left:4px solid #95a5a6; padding:12px; border-radius:8px;">
+                  <strong style="color:#2c3e50;"><i class="fas fa-times-circle"></i> Bóveda vacía</strong><br>
+                  <small style="color:#666;">No has subido tu archivo .p12.</small>
+              </div>
+          `;
+      }
+  });
+}
+
+window.handleP12Upload = function(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+      const dataUrl = e.target.result;
+      const requester = getRequesterFromSession();
+      
+      const box = document.getElementById("doctorSignatureStatusBox");
+      if (box) box.innerHTML = '<div style="padding:12px;"><i class="fas fa-spinner fa-spin"></i> Subiendo a la bóveda segura...</div>';
+
+      postApiWithSession_({ action: "upload_p12", p12_data_url: dataUrl, requester: requester })
+      .then(res => {
+          if (res.success) {
+              if (window.showToast) window.showToast("Firma guardada exitosamente.", "success");
+              else alert("Firma guardada exitosamente.");
+          } else {
+              alert("Error: " + (res.message || "No se pudo subir."));
+          }
+          loadDoctorSignatureStatus();
+      })
+      .catch(() => {
+          alert("Error de conexión.");
+          loadDoctorSignatureStatus();
+      });
+  };
+  reader.readAsDataURL(file);
+  input.value = "";
+};
+
+window.deleteDoctorSignature = async function() {
+  const ok = window.appConfirm ? await window.appConfirm({
+      title: "Eliminar Firma",
+      message: "¿Estás seguro de borrar tu archivo .p12 de la bóveda de Cloudflare R2?",
+      confirmText: "Sí, borrar",
+      cancelText: "Cancelar"
+  }) : confirm("¿Estás seguro de borrar tu archivo .p12 de la bóveda?");
+  if (!ok) return;
+
+  const requester = getRequesterFromSession();
+  postApiWithSession_({ action: "delete_p12", requester: requester })
+  .then(res => {
+      if (res.success) {
+          if (window.showToast) window.showToast("Firma eliminada de la bóveda.", "success");
+      } else {
+          alert("Error: " + res.message);
+      }
+      loadDoctorSignatureStatus();
+  });
+};
+
 // ============================
 // 2. TABLA Y DATOS
 // ============================
@@ -1625,6 +1710,7 @@ function setupNavigation() {
         switchView("profile");
         loadDoctorProfileFromSession();
         loadDoctorVacationStatus();
+        if (typeof loadDoctorSignatureStatus === "function") loadDoctorSignatureStatus();
       }
       // --- NUEVO: Opción Tipo de Servicio ---
       else if (text === "Tipo de Servicio") {

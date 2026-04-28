@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -270,6 +270,24 @@
                             </button>
                         </div>
                         <div id="doctorVacationStatusBox"></div>
+                    </div>
+
+                    <div class="card card-signature">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap;">
+                            <div>
+                                <h3 style="margin:0;">Bóveda de Firma Electrónica</h3>
+                                <p style="margin:6px 0 0 0; color:#666;">Carga tu archivo .p12 para firmar criptográficamente (FirmaEC).</p>
+                            </div>
+                            <button type="button" class="btn-primary-small" id="btnUploadP12" style="background:#2980b9;" onclick="document.getElementById('p12UploadInput').click()">
+                                <i class="fas fa-upload"></i> Subir archivo .p12
+                            </button>
+                        </div>
+                        <div id="doctorSignatureStatusBox">
+                            <div style="background:#f8f9fa; border-left:4px solid #95a5a6; padding:12px; border-radius:8px;">
+                                <strong style="color:#2c3e50;">Verificando estado...</strong>
+                            </div>
+                        </div>
+                        <input type="file" id="p12UploadInput" accept=".p12,.pfx" style="display:none;" onchange="handleP12Upload(this)">
                     </div>
                 </div>
 
