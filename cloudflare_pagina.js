@@ -1416,6 +1416,10 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
   });
   const cleanupResult = await deleteWorkerManagedAssetUrls_(env, staleUrls);
   const cleanupWarning = cleanupResult.success ? "" : cleanupResult.warning;
+  let finalWarning = cleanupWarning;
+  if (prepared.signatureWarnings) {
+    finalWarning = finalWarning ? (finalWarning + " | " + prepared.signatureWarnings) : prepared.signatureWarnings;
+  }
   return {
     status: 200,
     payload: {
@@ -1434,6 +1438,7 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
         certificate_key: normalizeText_(prepared.certificatePdfKey)
       },
       warning: cleanupWarning
+      warning: finalWarning
     }
   };
 }
@@ -4633,6 +4638,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
   let reportPdfKey = "";
   let recipePdfKey = "";
   let certificatePdfKey = "";
+  let signatureWarnings = [];
   if (Object.prototype.hasOwnProperty.call(src, "imagenes")) {
     const images = [];
     const list = Array.isArray(src.imagenes) ? src.imagenes : [];
@@ -4733,6 +4739,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
       const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, reportPdfDataUrl);
       if (signed.success && signed.dataUrl) {
         finalReportPdfDataUrl = signed.dataUrl;
+        if (signed.warning) signatureWarnings.push("Informe: " + signed.warning);
       }
     }
     const upload = await uploadDataUrlToWorkerStorage_(
@@ -4759,6 +4766,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
       const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, recipePdfDataUrl);
       if (signed.success && signed.dataUrl) {
         finalRecipePdfDataUrl = signed.dataUrl;
+        if (signed.warning) signatureWarnings.push("Receta: " + signed.warning);
       }
     }
     const upload = await uploadDataUrlToWorkerStorage_(
@@ -4785,6 +4793,7 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
       const signed = await signPdfWithCloudflareWorker_(env, opts.doctorId, opts.firmaPassword, certificatePdfDataUrl);
       if (signed.success && signed.dataUrl) {
         finalCertificatePdfDataUrl = signed.dataUrl;
+        if (signed.warning) signatureWarnings.push("Certificado: " + signed.warning);
       }
     }
     const upload = await uploadDataUrlToWorkerStorage_(
@@ -4816,6 +4825,8 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
     reportPdfKey,
     recipePdfKey,
     certificatePdfKey
+    certificatePdfKey,
+    signatureWarnings: signatureWarnings.length ? signatureWarnings.join(" | ") : ""
   };
 }
 __name(prepareDiagnosisPersistenceWorker_, "prepareDiagnosisPersistenceWorker_");
@@ -5659,15 +5670,37 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
     if (!parsedPdf) return { success: false, message: "PDF invalido." };
     try {
       const { default: signpdf } = await import("node-signpdf");
+      const { Buffer } = await import("node:buffer");
+      const signpdfModule = await import("node-signpdf");
+      const signpdf = signpdfModule.default || signpdfModule;
+      let plainAddPlaceholder = signpdfModule.plainAddPlaceholder;
+      if (!plainAddPlaceholder) {
+        try { const helpers = await import("node-signpdf/dist/helpers.js"); plainAddPlaceholder = helpers.plainAddPlaceholder; } catch(e) {}
+      }
+      if (!plainAddPlaceholder) {
+        try { const helpersIndex = await import("node-signpdf/dist/helpers/index.js"); plainAddPlaceholder = helpersIndex.plainAddPlaceholder; } catch(e) {}
+      }
+      if (!plainAddPlaceholder) {
+        throw new Error("Libreria placeholder-plain no detectada en Cloudflare.");
+      }
       const pdfBinary = atob(parsedPdf.base64);
       const pdfBytes = new Uint8Array(pdfBinary.length);
       for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
       const signedBytes = signpdf.sign(Buffer.from(pdfBytes), Buffer.from(p12Buffer), { passphrase: password });
+      let pdfBuffer = Buffer.from(pdfBytes);
+      pdfBuffer = plainAddPlaceholder({
+        pdfBuffer: pdfBuffer,
+        reason: 'Firma Medica',
+        signatureLength: 8192,
+      });
+      const signedBytes = signpdf.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
       const signedBase64 = arrayBufferToBase64Worker_(signedBytes);
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
     } catch (e) {
       console.warn("Worker: Libreria matematica PAdES no detectada. Retornando PDF con sello visual.");
       return { success: true, dataUrl: pdfDataUrl };
+      console.warn("Worker: PAdES Error:", e.message);
+      return { success: true, dataUrl: pdfDataUrl, warning: "Error Criptografico: " + e.message };
     }
   } catch (error) {
     return { success: false, message: toErrorMessage(error) };
