@@ -254,11 +254,11 @@ html, body {
     .login-wrapper {
         width: min(1280px, calc(100vw - 48px));
         margin: 0 auto;
-        flex-direction: row;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: clamp(2rem, 4vw, 4.5rem);
-        background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary-light) 100%);
+        gap: 0;
+        background: transparent;
     }
 
     .visual-side {
@@ -289,32 +289,40 @@ html, body {
 
     .visual-copy h2 {
         color: var(--color-primary-dark);
-        font-size: 1.8rem;
-        margin-bottom: 0.6rem;
+        font-size: 1.45rem;
+        margin-bottom: 0.4rem;
     }
 
     .visual-copy p {
         color: rgba(44, 62, 80, 0.92);
-        font-size: 0.95rem;
+        font-size: 0.82rem;
     }
 
     .form-side {
-        flex: 0 0 min(500px, 42vw);
-        max-width: 550px;
-        min-height: min(760px, calc(100vh - 64px));
-        margin: 2rem 0;
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 440px;
+        min-height: auto;
+        margin: 2rem auto;
         border-radius: 24px;
         background: #ffffff;
         justify-content: center;
-        padding: 2.8rem 1.8rem;
+        padding: 2.2rem 2.2rem;
         box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
     }
 
     .form-logo {
         display: inline-block;
+        width: 160px;
+        margin-bottom: 10px;
     }
 
     .login-footer {
-        margin-top: auto;
+        margin-top: 1rem;
+        padding-top: 15px;
     }
+
+    .login-header h1 { font-size: 1.15rem !important; }
+    .input-group input { padding: 12px 40px 12px 40px; font-size: 0.95rem; }
+    .btn-login { padding: 12px; font-size: 1rem; }
 }
