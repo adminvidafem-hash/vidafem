@@ -1,7 +1,3 @@
-import { Buffer } from "node:buffer";
-import signpdf from "@signpdf/signpdf";
-import { plainAddPlaceholder } from "@signpdf/placeholder-plain";
-
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -5674,12 +5670,16 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
     const parsedPdf = parseDataUrlWorker_(pdfDataUrl);
     if (!parsedPdf) return { success: false, message: "PDF invalido." };
     try {
-     
+      const { Buffer } = await import("node:buffer");
+      const signpdfMod = await import("@signpdf/signpdf");
+      const signpdf = signpdfMod.default || signpdfMod;
+      const placeholderMod = await import("@signpdf/placeholder-plain");
+      const plainAddPlaceholder = placeholderMod.plainAddPlaceholder || placeholderMod.default || placeholderMod;
+
       const pdfBinary = atob(parsedPdf.base64);
       const pdfBytes = new Uint8Array(pdfBinary.length);
       for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
       
- 
       let pdfBuffer = Buffer.from(pdfBytes);
       
       const metaObj = await bucket.get("firmas/" + doctorId + "/firma.p12.meta");
@@ -5695,7 +5695,6 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
         name: signerName,
         location: 'Ecuador'
       });
-      
       const signedBytes = signpdf.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
       const signedBase64 = arrayBufferToBase64Worker_(signedBytes);
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
@@ -5748,4 +5747,4 @@ __name(handleSignExistingDiagnosisAsset_, "handleSignExistingDiagnosisAsset_");
 export {
   index_default as default
 };
-//# sourceMappingURL=index.js.map.
+//# sourceMappingURL=index.js.map

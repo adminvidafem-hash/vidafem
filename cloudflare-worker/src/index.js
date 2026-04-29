@@ -1,7 +1,3 @@
-import { Buffer } from "node:buffer";
-import signpdf from "@signpdf/signpdf";
-import { plainAddPlaceholder } from "@signpdf/placeholder-plain";
-
 const SESSION_TTL_DEFAULT_SECONDS = 21600;
 const WORKER_STORAGE_ROUTE_PREFIX = "/files/";
 const WORKER_STORAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -5518,6 +5514,12 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
     if (!parsedPdf) return { success: false, message: "PDF invalido." };
 
     try {
+      const { Buffer } = await import("node:buffer");
+      const signpdfMod = await import("@signpdf/signpdf");
+      const signpdf = signpdfMod.default || signpdfMod;
+      const placeholderMod = await import("@signpdf/placeholder-plain");
+      const plainAddPlaceholder = placeholderMod.plainAddPlaceholder || placeholderMod.default || placeholderMod;
+
       const pdfBinary = atob(parsedPdf.base64);
       const pdfBytes = new Uint8Array(pdfBinary.length);
       for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
