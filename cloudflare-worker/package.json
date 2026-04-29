@@ -12,6 +12,8 @@
     "wrangler": "^4.0.0"
   },
   "dependencies": {
+    "@signpdf/placeholder-plain": "^3.3.0",
+    "@signpdf/signpdf": "^3.3.0",
     "buffer": "^6.0.3",
     "node-signpdf": "^3.0.0"
   }
