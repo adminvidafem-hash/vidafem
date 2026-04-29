@@ -162,6 +162,7 @@ window.toggleGlobalEdit = function() {
         inputs.forEach(inp => inp.disabled = false);
         btn.innerHTML = '<i class="fas fa-save"></i> Guardar Historia';
         btn.style.background = "#27ae60";
+        if (typeof window.toggleItsField === "function") window.toggleItsField();
     } else {
         saveHistoryChanges(btn, inputs, form);
     }
@@ -231,9 +232,15 @@ function saveHistoryChanges(btn, inputs, form) {
 window.toggleItsField = function() {
     const select = document.querySelector('select[name="ante_its"]');
     const input = document.querySelector('input[name="tipo_its"]');
+    const btnEdit = document.getElementById("btnGlobalEdit");
+    const isEditing = btnEdit && btnEdit.innerText.includes("Guardar");
     if (select && input) {
-        input.disabled = select.value !== "SI";
-        if (select.value !== "SI") input.value = "";
+        if (!isEditing) {
+            input.disabled = true;
+        } else {
+            input.disabled = select.value !== "SI";
+            if (select.value !== "SI") input.value = "";
+        }
     }
 };
 
