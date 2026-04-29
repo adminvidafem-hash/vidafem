@@ -133,7 +133,7 @@ html, body {
 
 /* --- AQUI CAMBIAS EL TAMAÑO DEL LOGO DEL FORMULARIO --- */
 .form-logo {
-    display: none;
+    display: inline-block;
     width: 200px; /* Antes era 120px, ahora es más grande */
     margin-bottom: 15px;
 }
