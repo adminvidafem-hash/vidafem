@@ -1847,7 +1847,7 @@ function ensureSignModalsExist() {
                 <h3 style="color:white; margin:0; font-size:1.1rem; flex: 1; line-height: 1.3;"><i class="fas fa-hand-pointer"></i> Arrastra la firma a la posición deseada</h3>
                 <span class="close-modal" id="closeSignPosition" style="color:white; opacity:0.8; font-size:28px; cursor:pointer;">&times;</span>
             </div>
-            <div class="modal-body" style="flex: 1; overflow: auto; background: #525659; display: flex; justify-content: center; padding: 20px; position: relative;">
+            <div class="modal-body" style="flex: 1; overflow: auto; background: #525659; text-align: center; padding: 20px; position: relative;">
                 <div id="pdfRenderContainer" style="position: relative; box-shadow: 0 0 10px rgba(0,0,0,0.5); display:inline-block; line-height:0; background:white;">
                     <canvas id="pdfRenderCanvas"></canvas>
                     <div id="signatureDraggable" style="position: absolute; left: 30px; top: 30px; width: 170px; height: 45px; border: 2px dashed #27ae60; background: rgba(39, 174, 96, 0.15); cursor: grab; display: flex; align-items: center; padding: 4px; box-sizing: border-box; user-select: none; touch-action: none; border-radius:4px;">
@@ -1873,9 +1873,9 @@ function ensureSignModalsExist() {
     // Lógica de arrastre
     const el = document.getElementById('signatureDraggable');
     const container = document.getElementById('pdfRenderContainer');
-    let isDragging = false, startX, startY, initialLeft, initialTop;
-    function onStart(e) { if(e.target.tagName === 'BUTTON') return; isDragging = true; const touch = e.touches ? e.touches[0] : e; startX = touch.clientX; startY = touch.clientY; initialLeft = parseInt(el.style.left || 0); initialTop = parseInt(el.style.top || 0); el.style.cursor = 'grabbing'; if (e.cancelable && e.type.includes('touch')) e.preventDefault(); }
-    function onMove(e) { if (!isDragging) return; const touch = e.touches ? e.touches[0] : e; const dx = touch.clientX - startX; const dy = touch.clientY - startY; let newL = initialLeft + dx; let newT = initialTop + dy; newL = Math.max(0, Math.min(newL, container.offsetWidth - el.offsetWidth)); newT = Math.max(0, Math.min(newT, container.offsetHeight - el.offsetHeight)); el.style.left = newL + 'px'; el.style.top = newT + 'px'; }
+    let isDragging = false, offsetX = 0, offsetY = 0;
+    function onStart(e) { if(e.target.tagName === 'BUTTON') return; isDragging = true; const touch = e.touches ? e.touches[0] : e; const rect = el.getBoundingClientRect(); offsetX = touch.clientX - rect.left; offsetY = touch.clientY - rect.top; el.style.cursor = 'grabbing'; if (e.cancelable && e.type.includes('touch')) e.preventDefault(); }
+    function onMove(e) { if (!isDragging) return; const touch = e.touches ? e.touches[0] : e; const contRect = container.getBoundingClientRect(); let newL = touch.clientX - contRect.left - offsetX; let newT = touch.clientY - contRect.top - offsetY; newL = Math.max(0, Math.min(newL, container.offsetWidth - el.offsetWidth)); newT = Math.max(0, Math.min(newT, container.offsetHeight - el.offsetHeight)); el.style.left = newL + 'px'; el.style.top = newT + 'px'; }
     function onEnd() { if(isDragging) { isDragging = false; el.style.cursor = 'grab'; } }
     el.addEventListener('mousedown', onStart); el.addEventListener('touchstart', onStart, {passive: false});
     document.addEventListener('mousemove', onMove); document.addEventListener('touchmove', onMove, {passive: false});
