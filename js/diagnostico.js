@@ -9,6 +9,7 @@ let currentGeneratedDocs = { report_pdf: "", recipe_pdf: "", certificate_pdf: ""
 let currentExternalPdfItems = [];
 let externalPdfLocalSeq = 0;
 let currentMedicalCertificate = null;
+let patientHistoryCache = null;
 // Ya no usamos existingFileIds fija, todo se lee del DOM
 
 // VARIABLES EDITOR
@@ -877,18 +878,20 @@ function renderDiagnosisTemplateEntryHtml_(entry) {
 
     let html = "<section style=\"margin:0 0 6mm 0; page-break-inside:avoid;\">"
       + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1.5mm;\">" + label + "</div>"
-      + "<table style=\"width:100%; border-collapse:collapse; font-size:9pt; color:#222; border:1px solid #cbd5e1;\">"
+      + "<table style=\"width:100%; border-collapse:collapse; font-size:9pt; color:#222;\">"
       + "<thead><tr style=\"background:#e2e8f0;\">";
     
     headers.forEach(h => {
-      html += "<th style=\"padding:2mm; border-bottom:1px solid #cbd5e1; border-right:1px solid #cbd5e1; text-align:left; color:#1e293b;\">" + escapeHtmlDiagnosis_(h) + "</th>";
+      html += "<th style=\"padding:2mm; border:1px solid #94a3b8; text-align:left; color:#1e293b;\">" + escapeHtmlDiagnosis_(h) + "</th>";
     });
     html += "</tr></thead><tbody>";
 
     rows.forEach(r => {
-      html += "<tr style=\"border-bottom:1px dotted #cbd5e1;\">";
-      headers.forEach(h => {
-        html += "<td style=\"padding:1.5mm 2mm; border-right:1px dotted #cbd5e1; vertical-align:top;\">" + escapeHtmlDiagnosis_(r[h]) + "</td>";
+      html += "<tr>";
+      headers.forEach((h, i) => {
+        let tdStyle = "padding:1.5mm 2mm; border-bottom:1px dashed #cbd5e1; vertical-align:top;";
+        if (i < headers.length - 1) tdStyle += " border-right:1px dashed #cbd5e1;";
+        html += "<td style=\"" + tdStyle + "\">" + escapeHtmlDiagnosis_(r[h]) + "</td>";
       });
       html += "</tr>";
     });
@@ -920,6 +923,17 @@ function renderDiagnosisTemplateEntryHtml_(entry) {
       + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1mm;\">" + label + "</div>"
       + "<div style=\"font-size:10pt;line-height:1.45;color:#222;\">" + linesHtml + "</div>"
       + "</section>";
+  }
+
+  if (type === "antecedentes_go_rendered") {
+      const valueHtml = String(entry.value || ""); 
+      return ""
+          + "<section style=\"margin:0 0 4mm 0; page-break-inside:avoid;\">"
+          + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin-bottom:1.5mm;\">" + label + "</div>"
+          + "<div style=\"font-size:9.5pt;line-height:1.45;color:#222; background:#f8fafc; padding:2mm 2.5mm; border-radius:1.5mm; border:1px solid #e2e8f0;\">" 
+          + valueHtml 
+          + "</div>"
+          + "</section>";
   }
 
   const value = diagnosisValueToHtmlLines_(entry && entry.value);
@@ -1765,6 +1779,28 @@ function buildDiagnosisPdfFieldEntries_(payload) {
       if (!key || type === "titulo" || type === "imagenes") return;
       used[key] = true;
 
+      if (type === "antecedentes_go") {
+          const parts = String(item && item.opciones || "").split("|||");
+          const lines = [];
+          parts.forEach(part => {
+              const p = part.split(':');
+              const k = p[0];
+              const l = p[1] || k;
+              if(!k) return;
+              const val = diagnosisPdfValueToText_(dynamicData['ago_' + k]);
+              if (val) lines.push("<b>" + escapeHtmlDiagnosis_(l) + ":</b> " + escapeHtmlDiagnosis_(val));
+          });
+          if (lines.length) {
+              entries.push({
+                  key: key,
+                  label: String((item && item.etiqueta) || "Antecedentes Gineco-Obstétricos").trim(),
+                  value: lines.join(" &nbsp;|&nbsp; "), 
+                  type: "antecedentes_go_rendered" 
+              });
+          }
+          return;
+      }
+
       if (type === "tabla_resultados") {
         entries.push({
           key: key,
@@ -2300,6 +2336,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (typeof loadPatientFullData === 'function') loadPatientFullData(pId);
     
+    const requester = getRequesterFromSession();
+    if (requester) {
+        postDiagnosisApiJson_({ action: "get_history", id_paciente: pId, requester: requester })
+        .then(res => {
+            if (res.success && res.data) patientHistoryCache = res.data;
+        }).catch(e => console.warn("Error cargando historial", e));
+    }
+
     // Ajustar botón volver
     const btnBack = document.querySelector(".btn-back-sidebar");
     if (btnBack) btnBack.href = window.withEnvUrl(`clinical.html?id=${pId}&tab=diagnostico`);
@@ -4583,6 +4627,30 @@ function renderDynamicFields(nombreServicio, campos) {
             </div>
            `;
         } 
+        // --- NUEVO: ANTECEDENTES GINECO OBSTETRICOS ---
+        else if (c.tipo === 'antecedentes_go') {
+            const parts = String(c.opciones || "").split("|||");
+            let agoHtml = `<div class="dyn-ago-group" data-field-key="${c.nombre}" style="display:flex; flex-wrap:wrap; gap:12px; padding:15px; border:1px solid #e2e8f0; border-radius:8px; background:#fdfdfe; margin-top:5px;">`;
+            
+            parts.forEach(part => {
+                const p = part.split(':');
+                const k = p[0];
+                const l = p[1] || k;
+                if(!k) return;
+                
+                let val = (patientHistoryCache && patientHistoryCache[k] !== undefined && patientHistoryCache[k] !== null) ? escapeHtmlDiagnosis_(patientHistoryCache[k]) : "";
+                if (val && (k === "fecha_aborto" || k === "fum")) val = val.split('T')[0];
+                let inputType = (k === "fecha_aborto" || k === "fum") ? "date" : "text";
+                agoHtml += `
+                    <div style="flex: 1 1 120px; min-width:120px; display:flex; flex-direction:column;">
+                        <label style="font-size:0.8rem; color:#475467; font-weight:bold; margin-bottom:4px;">${l}</label>
+                        <input type="${inputType}" id="dyn_ago_${k}" data-ago-key="${k}" class="doc-input" value="${val}" style="padding:8px; font-size:0.9rem;">
+                    </div>
+                `;
+            });
+            agoHtml += `</div>`;
+            inputHtml = agoHtml;
+        }
         // --- NUEVO: LISTAS DESPLEGABLES (SELECT) ---
         else if (c.tipo === 'select') {
             let optionsHtml = `<option value="">-- Seleccionar --</option>`;

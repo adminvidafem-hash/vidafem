@@ -71,7 +71,7 @@ function historyMatchesSavedData_(expected, actual) {
         "ago_g", "ago_p", "ago_c", "ago_a",
         "fecha_aborto", "pap", "fum",
         "anticonceptivos", "tipo_anti", "tiempo_uso",
-        "tipo_ultimo"
+        "tipo_ultimo", "ante_its", "tipo_its"
     ];
 
     return fields.every((key) => {
@@ -146,6 +146,7 @@ function fillHistoryForm(data) {
         const radio = form.querySelector(`input[name="tipo_ultimo"][value="${data.tipo_ultimo}"]`);
         if (radio) radio.checked = true;
     }
+    if (typeof window.toggleItsField === "function") window.toggleItsField();
 }
 
 window.toggleGlobalEdit = function() {
@@ -226,6 +227,15 @@ function saveHistoryChanges(btn, inputs, form) {
         });
     });
 }
+
+window.toggleItsField = function() {
+    const select = document.querySelector('select[name="ante_its"]');
+    const input = document.querySelector('input[name="tipo_its"]');
+    if (select && input) {
+        input.disabled = select.value !== "SI";
+        if (select.value !== "SI") input.value = "";
+    }
+};
 
 function safeTextHistory(id, text) {
     const el = document.getElementById(id);

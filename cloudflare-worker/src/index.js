@@ -4886,6 +4886,8 @@ function buildClinicalHistoryWriteRow_(payload, patientId) {
     tipo_anti: normalizeText_(data.tipo_anti),
     tiempo_uso: normalizeText_(data.tiempo_uso),
     tipo_ultimo: normalizeText_(data.tipo_ultimo),
+    ante_its: normalizeText_(data.ante_its),
+    tipo_its: normalizeText_(data.tipo_its),
     fecha_actualizacion: normalizeIsoDateTimeValue_(new Date())
   };
 }

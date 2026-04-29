@@ -76,6 +76,41 @@
     };
     scopeHookInstalled = true;
   }
+  
+  // --- GESTIÓN DE CHIPS (CUADRITOS) DE ANTECEDENTES G.O. ---
+  window.addAgoChip = function(btn) {
+      var row = btn.closest('.sbv2-field-row');
+      var select = row.querySelector('.ago-add-select');
+      var container = row.querySelector('.ago-chips-container');
+      var hiddenInput = row.querySelector('.sbv2-ago-data');
+      if (!select || !container || !hiddenInput) return;
+      var key = select.value;
+      var defaultLabel = select.options[select.selectedIndex].text;
+      if (container.querySelector('[data-key="'+key+'"]')) { alert("Este campo ya está agregado."); return; }
+      var chip = document.createElement('div');
+      chip.className = "ago-chip";
+      chip.dataset.key = key;
+      chip.style.cssText = "display:flex; align-items:center; background:#eef2f6; border:1px solid #cbd5e1; border-radius:16px; padding:4px 10px; font-size:0.85rem;";
+      chip.innerHTML = '<input type="text" value="' + escapeHtml(defaultLabel) + '" oninput="window.updateAgoData(this)" style="border:none; background:transparent; width:80px; font-size:0.85rem; color:#334155; outline:none; font-weight:600;"><button type="button" onclick="window.removeAgoChip(this)" style="background:none; border:none; color:#e74c3c; cursor:pointer; margin-left:6px; font-weight:bold; font-size:1.1rem; line-height:1;">&times;</button>';
+      container.appendChild(chip);
+      window.updateAgoData(chip.querySelector('input'));
+  };
+  window.removeAgoChip = function(btn) {
+      var chip = btn.closest('.ago-chip');
+      var input = chip.querySelector('input');
+      chip.remove();
+      window.updateAgoData(input); 
+  };
+  window.updateAgoData = function(el) {
+      var row = el ? el.closest('.sbv2-field-row') : null;
+      if (!row) return;
+      var container = row.querySelector('.ago-chips-container');
+      var hiddenInput = row.querySelector('.sbv2-ago-data');
+      var parts = [];
+      container.querySelectorAll('.ago-chip').forEach(function(chip) { var k = chip.dataset.key; var l = chip.querySelector('input').value.trim() || k; parts.push(k + ":" + l); });
+      hiddenInput.value = parts.join("|||");
+      hiddenInput.dispatchEvent(new Event('input', {bubbles: true}));
+  };
 
   function askScopeOnCreate() {
     var modal = qs("modalServiceScopeChoice");
@@ -293,12 +328,16 @@
     var toVal = "DETECTADO, NO DETECTADO";
     var trVal = "";
     var normalOptionsVal = optionsVal;
+    var agoOptionsVal = "";
 
     if (typeVal === "tabla_resultados" && optionsVal) {
       var parts = optionsVal.split("|||");
       thVal = parts[0] ? parts[0].trim() : thVal;
       toVal = parts[1] ? parts[1].trim() : toVal;
       trVal = parts[2] ? parts[2].trim() : trVal;
+      normalOptionsVal = "";
+    } else if (typeVal === "antecedentes_go" && optionsVal) {
+      agoOptionsVal = optionsVal;
       normalOptionsVal = "";
     }
 
@@ -338,10 +377,39 @@
       '<input type="text" class="sbv2-table-opts sbv2-input" placeholder="Ej: DETECTADO, NO DETECTADO" value="' + escapeHtml(toVal) + '" style="margin-bottom:10px;">' +
       '<label style="font-size:0.8rem; font-weight:bold; color:#2c3e50; display:block; margin-bottom:4px;">Exámenes a evaluar (uno por línea o separados por coma):</label>' +
       '<textarea class="sbv2-table-rows sbv2-textarea" placeholder="Ej: Herpes Simplex Virus-1, VIH, Sífilis" rows="3">' + escapeHtml(trVal) + '</textarea>' +
+      "</div>" +
+      '<div class="sbv2-field-options sbv2-options-ago" ' + (typeVal === "antecedentes_go" ? '' : 'style="display:none;"') + ' style="background:#f4f6f9; padding:12px; border-radius:8px; margin-top:8px;">' +
+      '<label style="font-size:0.8rem; font-weight:bold; color:#2c3e50; display:block; margin-bottom:4px;">Campos a incluir (Modifica el título o borra los que no necesites):</label>' +
+      '<div class="ago-chips-container" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; min-height:38px; border:1px dashed #cbd5e1; padding:8px; border-radius:6px; background:#fff;"></div>' +
+      '<div style="display:flex; gap:5px; align-items:center;">' +
+      '<select class="ago-add-select sbv2-input" style="flex:1;">' +
+      '<option value="menarquia">Menarquia</option><option value="prs">PRS</option>' +
+      '<option value="num_parejas">N° Parejas</option><option value="ago_g">Gestas (G)</option>' +
+      '<option value="ago_p">Partos (P)</option><option value="ago_c">Cesáreas (C)</option>' +
+      '<option value="ago_a">Abortos (A)</option><option value="fecha_aborto">Fecha Aborto / Últ.</option>' +
+      '<option value="pap">PAP</option><option value="fum">FUM</option>' +
+      '<option value="anticonceptivos">Anticonceptivos</option><option value="tipo_anti">Tipo Anticonceptivo</option>' +
+      '<option value="tiempo_uso">Tiempo Uso</option>' +
+      '</select>' +
+      '<button type="button" class="sbv2-btn" onclick="window.addAgoChip(this)" style="background:#3498db; color:white;">Agregar</button>' +
+      '</div>' +
+      '<input type="hidden" class="sbv2-ago-data" value="' + escapeHtml(agoOptionsVal) + '">' +
       "</div>";
 
-    if (typeVal === "select" || typeVal === "casillas_opciones" || typeVal === "tabla_resultados") row.classList.add("sbv2-options-active");
+    if (typeVal === "select" || typeVal === "casillas_opciones" || typeVal === "tabla_resultados" || typeVal === "antecedentes_go") row.classList.add("sbv2-options-active");
     els.fields.appendChild(row);
+
+    if (typeVal === "antecedentes_go" && agoOptionsVal) {
+        var container = row.querySelector('.ago-chips-container');
+        agoOptionsVal.split('|||').forEach(function(part) {
+            var p = part.split(':'); var k = p[0]; var l = p[1] || k; if(!k) return;
+            var chip = document.createElement('div');
+            chip.className = "ago-chip"; chip.dataset.key = k;
+            chip.style.cssText = "display:flex; align-items:center; background:#eef2f6; border:1px solid #cbd5e1; border-radius:16px; padding:4px 10px; font-size:0.85rem;";
+            chip.innerHTML = '<input type="text" value="' + escapeHtml(l) + '" oninput="window.updateAgoData(this)" style="border:none; background:transparent; width:80px; font-size:0.85rem; color:#334155; outline:none; font-weight:600;"><button type="button" onclick="window.removeAgoChip(this)" style="background:none; border:none; color:#e74c3c; cursor:pointer; margin-left:6px; font-weight:bold; font-size:1.1rem; line-height:1;">&times;</button>';
+            container.appendChild(chip);
+        });
+    }
   }
 
   function optionHtml(typeVal) {
@@ -353,6 +421,7 @@
       option("casillas_opciones", "Casillas opciones", typeVal),
       option("imagenes", "Galería de fotos", typeVal),
       option("tabla_resultados", "Panel de Resultados (Tabla)", typeVal),
+      option("antecedentes_go", "Antecedentes Gineco-Obstétricos", typeVal),
       option("titulo", "-- Título de sección --", typeVal),
     ].join("");
   }
@@ -374,15 +443,23 @@
     if (!row) return;
     var normalOpts = row.querySelector(".sbv2-options-normal");
     var tableOpts = row.querySelector(".sbv2-options-table");
+    var agoOpts = row.querySelector(".sbv2-options-ago");
 
     if (select.value === "tabla_resultados") {
         row.classList.add("sbv2-options-active");
         if (normalOpts) normalOpts.style.display = "none";
         if (tableOpts) tableOpts.style.display = "block";
+        if (agoOpts) agoOpts.style.display = "none";
+    } else if (select.value === "antecedentes_go") {
+        row.classList.add("sbv2-options-active");
+        if (normalOpts) normalOpts.style.display = "none";
+        if (tableOpts) tableOpts.style.display = "none";
+        if (agoOpts) agoOpts.style.display = "block";
     } else if (select.value === "select" || select.value === "casillas_opciones") {
         row.classList.add("sbv2-options-active");
         if (normalOpts) normalOpts.style.display = "block";
         if (tableOpts) tableOpts.style.display = "none";
+        if (agoOpts) agoOpts.style.display = "none";
     } else {
         row.classList.remove("sbv2-options-active");
     }
@@ -424,6 +501,8 @@
               '<div class="sbv2-field-images"><div></div><div></div><div></div></div>';
           } else if (f.type === "tabla_resultados") {
             valueHtml = '<div style="background:#f0f4f8; padding:10px; border-radius:4px; font-size:10px; border:1px dashed #cbd5e1; color:#64748b;">[ TABLA DE EXÁMENES ]</div>';
+          } else if (f.type === "antecedentes_go") {
+            valueHtml = '<div style="background:#fdfdfe; padding:10px; border-radius:4px; font-size:10px; border:1px dashed #cbd5e1; color:#64748b;">[ BLOQUE ANTECEDENTES G.O. AUTO-RECARGADO ]</div>';
           } else {
             valueHtml = '<div class="sbv2-field-value-line"></div>';
           }
@@ -465,12 +544,15 @@
           var to = row.querySelector(".sbv2-table-opts").value || "DETECTADO, NO DETECTADO";
           var tr = row.querySelector(".sbv2-table-rows").value || "";
           optionsRaw = th + "|||" + to + "|||" + tr;
+      } else if (type === "antecedentes_go") {
+          var agoInp = row.querySelector(".sbv2-ago-data");
+          optionsRaw = agoInp ? agoInp.value : "";
       } else {
           var normalInp = row.querySelector(".sbv2-field-options-input");
           optionsRaw = normalInp ? normalInp.value : "";
       }
 
-      var options = type === "tabla_resultados" 
+      var options = (type === "tabla_resultados" || type === "antecedentes_go")
           ? [optionsRaw] 
           : optionsRaw.split(",").map(function (s) {
               return s.trim();
