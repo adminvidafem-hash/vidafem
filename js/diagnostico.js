@@ -4993,11 +4993,29 @@ window.applyElectronicSignature = function() {
 
 // Función que estampa el sello visual inalterable en el PDF usando pdf-lib
 async function applyElectronicSignatureToPdf_(dataUrl) {
-    // La firma visual ahora se dibuja de forma nativa dentro de las plantillas HTML
-    // y en el fallback de jsPDF para asegurar que siempre quede exactamente
-    // encima de la firma virtual (sin importar el tamaño del documento).
-    // Se mantiene esta función intacta para futuras implementaciones de PAdES.
-    return dataUrl;
+    try {
+        if (!window.PDFLib) return dataUrl;
+        // Normalizar PDF con pdf-lib para asegurar estructura estricta PAdES/FirmaEC
+        const existingPdfBytes = await fetch(dataUrl).then(res => res.arrayBuffer());
+        const pdfDoc = await window.PDFLib.PDFDocument.load(existingPdfBytes);
+        
+        // Setear metadatos obliga a pdf-lib a regenerar el array /ID (Requisito estricto de FirmaEC)
+        pdfDoc.setTitle('Documento Médico VIDAFEM');
+        pdfDoc.setCreator('VIDAFEM System');
+        pdfDoc.setProducer('VIDAFEM');
+        const pdfBytes = await pdfDoc.save();
+        
+        let binary = '';
+        const bytes = new Uint8Array(pdfBytes);
+        const chunkSize = 32768;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return "data:application/pdf;base64," + window.btoa(binary);
+    } catch (e) {
+        console.warn("Fallo al normalizar PDF para FirmaEC:", e);
+        return dataUrl;
+    }
 }
 
 // Auxiliar para leer la receta

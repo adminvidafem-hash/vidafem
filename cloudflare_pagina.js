@@ -5683,11 +5683,21 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
       const pdfBinary = atob(parsedPdf.base64);
       const pdfBytes = new Uint8Array(pdfBinary.length);
       for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
+      
       let pdfBuffer = Buffer.from(pdfBytes);
+      
+      const metaObj = await bucket.get("firmas/" + doctorId + "/firma.p12.meta");
+      let signerName = "Profesional Medico";
+      if (metaObj) {
+        try { const metaJson = await metaObj.json(); signerName = metaJson.cert_name || signerName; } catch(e){}
+      }
+      
       pdfBuffer = plainAddPlaceholder({
         pdfBuffer: pdfBuffer,
-        reason: 'Firma Medica',
-        signatureLength: 8192,
+        reason: 'Firma Electronica Medica',
+        signatureLength: 33280,
+        name: signerName,
+        location: 'Ecuador'
       });
       const signedBytes = signpdf.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
       const signedBase64 = arrayBufferToBase64Worker_(signedBytes);
