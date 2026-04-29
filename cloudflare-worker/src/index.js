@@ -1,3 +1,8 @@
+import { Buffer } from "node:buffer";
+import * as signpdfPkg from "@signpdf/signpdf";
+import * as placeholderPkg from "@signpdf/placeholder-plain";
+import * as signerP12Pkg from "@signpdf/signer-p12";
+
 const SESSION_TTL_DEFAULT_SECONDS = 21600;
 const WORKER_STORAGE_ROUTE_PREFIX = "/files/";
 const WORKER_STORAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -5514,16 +5519,13 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
     if (!parsedPdf) return { success: false, message: "PDF invalido." };
 
     try {
-      const { Buffer } = await import("node:buffer");
-      const signpdfMod = await import("@signpdf/signpdf");
-      let signer = signpdfMod.default || signpdfMod;
+      let signer = signpdfPkg.default || signpdfPkg;
       if (signer && signer.default && typeof signer.default.sign === 'function') signer = signer.default;
       if (typeof signer.sign !== 'function') {
-        const SignPdfClass = signpdfMod.SignPdf || signer.SignPdf;
+        const SignPdfClass = signpdfPkg.SignPdf || signer.SignPdf;
         if (SignPdfClass) signer = new SignPdfClass();
       }
-      const placeholderMod = await import("@signpdf/placeholder-plain");
-      let plainAddPlaceholder = placeholderMod.plainAddPlaceholder || placeholderMod.default || placeholderMod;
+     let plainAddPlaceholder = placeholderPkg.plainAddPlaceholder || placeholderPkg.default || placeholderPkg;
       if (typeof plainAddPlaceholder !== 'function' && plainAddPlaceholder.plainAddPlaceholder) {
         plainAddPlaceholder = plainAddPlaceholder.plainAddPlaceholder;
       }
@@ -5548,13 +5550,11 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
         location: 'Ecuador'
       });
 
-      const p12SignerMod = await import("@signpdf/signer-p12");
-      const P12Signer = p12SignerMod.P12Signer || (p12SignerMod.default && p12SignerMod.default.P12Signer);
-      const p12SignerInstance = new P12Signer(Buffer.from(p12Buffer), { passphrase: password });
-
+      let P12SignerClass = signerP12Pkg.P12Signer || (signerP12Pkg.default && signerP12Pkg.default.P12Signer) || signerP12Pkg;
+      if (typeof P12SignerClass !== 'function' && P12SignerClass.P12Signer) P12SignerClass = P12SignerClass.P12Signer;
+      const p12SignerInstance = new P12SignerClass(Buffer.from(p12Buffer), { passphrase: password });
       const signedBytes = await signer.sign(pdfBuffer, p12SignerInstance);
       const signedBase64 = Buffer.from(signedBytes).toString("base64");
-      
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
     } catch (e) {
       console.warn("Worker: PAdES Error:", e.message);
