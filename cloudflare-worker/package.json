@@ -2,6 +2,7 @@
   "name": "vidafem-api",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "src/index.js",
   "dependencies": {
     "@signpdf/placeholder-plain": "^3.0.0",
