@@ -5701,7 +5701,10 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
         name: signerName,
         location: 'Ecuador'
       });
-      const signedBytes = await signer.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
+      const p12SignerMod = await import("@signpdf/signer-p12");
+      const P12Signer = p12SignerMod.P12Signer || (p12SignerMod.default && p12SignerMod.default.P12Signer);
+      const p12SignerInstance = new P12Signer(Buffer.from(p12Buffer), { passphrase: password });
+      const signedBytes = await signer.sign(pdfBuffer, p12SignerInstance);
       const signedBase64 = Buffer.from(signedBytes).toString("base64");
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
     } catch (e) {
