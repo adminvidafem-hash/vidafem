@@ -5540,7 +5540,7 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
         try { const metaJson = await metaObj.json(); signerName = metaJson.cert_name || signerName; } catch(e){}
       }
       
-      pdfBuffer = plainAddPlaceholder({
+      pdfBuffer = await plainAddPlaceholder({
         pdfBuffer: pdfBuffer,
           reason: 'Firma Electronica Medica',
         signatureLength: 33280,
@@ -5548,7 +5548,7 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
         location: 'Ecuador'
       });
 
-      const signedBytes = signer.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
+      const signedBytes = await signer.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });
       const signedBase64 = Buffer.from(signedBytes).toString("base64");
       
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
