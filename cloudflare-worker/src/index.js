@@ -71,7 +71,8 @@ const LOCAL_ACTIONS = new Set([
   "ping",
   "get_p12_status",
   "upload_p12",
-  "delete_p12"
+  "delete_p12",
+  "sign_existing_diagnosis_asset"
 ]);
 
 export default {
@@ -347,6 +348,8 @@ async function handleLocalAction_(action, body, env, url) {
       return handleUploadP12_(body, env);
     case "delete_p12":
       return handleDeleteP12_(body, env);
+    case "sign_existing_diagnosis_asset":
+      return handleSignExistingDiagnosisAsset_(body, env, url);
     default:
       return {
         status: 501,
@@ -4563,6 +4566,57 @@ async function supabaseRest_(env, method, tableName, options) {
   }
 }
 
+async function handleSignExistingDiagnosisAsset_(body, env, requestUrl) {
+  const validation = await validateOwnSessionAction_(env, body, { allowRoles: ["admin", "superadmin"] });
+  if (!validation.ok) return validation.result;
+  const reportId = normalizeText_(body.id_reporte);
+  const assetType = normalizeText_(body.asset_type);
+  const assetId = normalizeText_(body.asset_id);
+  const pdfDataUrl = normalizeText_(body.pdf_data_url);
+  const password = normalizeText_(body.firma_password);
+  if (!reportId || !assetType || !pdfDataUrl || !password) {
+    return { status: 400, payload: { success: false, message: "Faltan datos para firmar el documento." } };
+  }
+  const signed = await signPdfWithCloudflareWorker_(env, validation.session.user_id, password, pdfDataUrl);
+  if (!signed.success || !signed.dataUrl || signed.warning) {
+    return { status: 500, payload: { success: false, message: signed.message || signed.warning || "Error criptografico al firmar el PDF." } };
+  }
+  const report = await findSingleByField_(env, "diagnosticos_archivos", "id_reporte", reportId);
+  if (!report) return { status: 404, payload: { success: false, message: "Reporte no encontrado." } };
+  const patientAccess = await resolveAccessiblePatientForSession_(env, validation.session, report.id_paciente);
+  if (!patientAccess.ok) return patientAccess.result;
+  const newKey = joinStorageObjectKey_([report.id_paciente, reportId, "firmados", assetType + "_" + Date.now() + "_" + randomHex_(4)]);
+  const upload = await uploadDataUrlToWorkerStorage_(env, requestUrl, newKey, signed.dataUrl);
+  if (!upload.success) return { status: 500, payload: { success: false, message: "No se pudo guardar el PDF firmado." } };
+  const newUrl = upload.url;
+  const payload = parseStoredDiagnosisJson_(report.datos_json);
+  let updatedPdfUrl = normalizeText_(report.pdf_url);
+  let oldUrl = "";
+  if (assetType === "report_pdf") {
+    oldUrl = updatedPdfUrl;
+    updatedPdfUrl = newUrl;
+  } else if (assetType === "recipe_pdf") {
+    oldUrl = payload.pdf_receta_link;
+    payload.pdf_receta_link = newUrl;
+  } else if (assetType === "certificate_pdf") {
+    oldUrl = payload.pdf_certificado_link;
+    payload.pdf_certificado_link = newUrl;
+  } else if (assetType === "external_pdf") {
+    let externalItems = getDiagnosisExternalPdfItemsForWorker_(payload);
+    const idx = externalItems.findIndex(i => String(i.id) === assetId || String(i.url) === assetId);
+    if (idx > -1) {
+      oldUrl = externalItems[idx].url;
+      externalItems[idx].url = newUrl;
+      payload.pdf_externos = externalItems;
+      if (idx === 0) payload.pdf_externo_link = newUrl;
+    }
+  }
+  const updateRes = await supabaseRest_(env, "patch", "diagnosticos_archivos", { filters: { id_reporte: eq_(reportId) }, prefer: "return=minimal", body: { datos_json: JSON.stringify(payload), pdf_url: updatedPdfUrl } });
+  if (!updateRes.success) return { status: 500, payload: { success: false, message: "No se pudo actualizar BD." } };
+  if (oldUrl && isWorkerManagedUrlWorker_(oldUrl)) await deleteWorkerManagedAssetByUrl_(env, oldUrl);
+  return { status: 200, payload: { success: true, message: "Documento firmado exitosamente.", new_url: newUrl } };
+}
+
 function extractSupabaseErrorMessage_(rawText, parsed) {
   if (parsed && typeof parsed === "object") {
     if (parsed.message) return String(parsed.message);
@@ -5481,10 +5535,18 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
       
       let pdfBuffer = Buffer.from(pdfBytes);
       
+      const metaObj = await bucket.get("firmas/" + doctorId + "/firma.p12.meta");
+      let signerName = "Profesional Medico";
+      if (metaObj) {
+        try { const metaJson = await metaObj.json(); signerName = metaJson.cert_name || signerName; } catch(e){}
+      }
+      
       pdfBuffer = plainAddPlaceholder({
         pdfBuffer: pdfBuffer,
-        reason: 'Firma Medica',
-        signatureLength: 8192,
+          reason: 'Firma Electronica Medica',
+        signatureLength: 33280,
+        name: signerName,
+        location: 'Ecuador'
       });
 
       const signedBytes = signpdf.sign(pdfBuffer, Buffer.from(p12Buffer), { passphrase: password });

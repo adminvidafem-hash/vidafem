@@ -3687,9 +3687,10 @@ function renderGeneratedDocsCard_() {
     const url = docs[key];
     return `
       <div style="display:flex; align-items:center; gap:6px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
-        <a href="${url}" target="_blank" style="display:inline-flex; align-items:center; gap:8px; color:${meta.color}; text-decoration:none; font-weight:700;">
-          <i class="${meta.icon}"></i> ${meta.label}
-        </a>
+            <div style="display:inline-flex; align-items:center; gap:8px; color:${meta.color}; text-decoration:none; font-weight:700; cursor:pointer;"
+                 onclick="openDocumentOptionsModal('${url}', '${key}', '', '${currentReportId}', '${meta.label}')">
+                 <i class="${meta.icon}"></i> ${meta.label}
+            </div>
       </div>
     `;
   }).join("");
@@ -4762,16 +4763,6 @@ document.addEventListener("DOMContentLoaded", function() {
 // --- FUNCIÓN MAESTRA DE GUARDADO (Poner al final de diagnostico.js) ---
 
 function handleMasterSave(generatePdf, btn) {
-    const isElectronicSignatureChecked = document.getElementById("includeElectronicSignature") && document.getElementById("includeElectronicSignature").checked;
-    
-    if (isElectronicSignatureChecked && generatePdf) {
-        if (!rememberedSignatureData || !rememberedSignatureData.certInfo) {
-            alert("⚠️ Debes cargar y verificar tu firma electrónica antes de generar el documento.");
-            openElectronicSignatureModal(null);
-            return; // Detenemos para que cargue la firma primero
-        }
-    }
-
     executeMasterSaveFlow(generatePdf, btn);
 }
 
@@ -5501,3 +5492,176 @@ window.addEventListener("beforeunload", (e) => {
         e.returnValue = ""; // Necesario para Chrome/Edge
     }
 });
+
+// ==========================================
+// MODAL DINÁMICO DE OPCIONES Y FIRMA
+// ==========================================
+let currentSignTarget = null;
+function ensureSignModalsExist() {
+    if (document.getElementById('modalDocumentOptions')) return;
+    const div = document.createElement('div');
+    div.innerHTML = `
+    <div class="modal-overlay" id="modalDocumentOptions">
+        <div class="modal-box modal-box-fancy" style="max-width:400px;">
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #2980b9, #1f5f8b);">
+                <h3 id="docOptionsTitle"><i class="fas fa-file-alt"></i> Opciones</h3>
+                <span class="close-modal" onclick="closeModal('modalDocumentOptions')">&times;</span>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <p style="margin-bottom: 20px; color:#555;">¿Qué deseas hacer con este documento?</p>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button type="button" class="btn-submit" id="btnOpenNormalDoc" style="background:#3498db; width:100%;">
+                        <i class="fas fa-external-link-alt"></i> Abrir / Ver PDF
+                    </button>
+                    <button type="button" class="btn-submit" onclick="openSignExistingModal()" style="background:#27ae60; width:100%;">
+                        <i class="fas fa-file-signature"></i> Firmar Electrónicamente (FirmaEC)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modalSignExisting">
+        <div class="modal-box modal-box-fancy" style="max-width:500px;">
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449);">
+                <h3><i class="fas fa-file-signature"></i> Firmar Documento</h3>
+                <span class="close-modal" onclick="closeModal('modalSignExisting')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form onsubmit="event.preventDefault(); applySignExisting();">
+                    <p style="margin:0 0 14px; color:#5b6470;">
+                        Se inyectará tu firma matemática y el sello visual oficial de FirmaEC al final del documento.
+                    </p>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label style="font-weight:bold; color:#2c3e50;">Contraseña de tu Firma (PIN)</label>
+                        <input type="password" id="signExistingPassword" class="doc-input" placeholder="Ingresa la clave de tu bóveda" required style="width:100%;">
+                    </div>
+                    <div style="margin-top:16px; text-align:right; display:flex; justify-content:flex-end; gap:10px;">
+                        <button type="button" class="btn-primary-small" style="background:#666;" onclick="closeModal('modalSignExisting')">Cancelar</button>
+                        <button type="submit" class="btn-primary-small" style="background:#27ae60;" id="btnApplySignExisting">Aplicar Firma</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.appendChild(div);
+}
+document.addEventListener("DOMContentLoaded", ensureSignModalsExist);
+
+window.openDocumentOptionsModal = function(url, assetType, assetId, reportId, docTitle) {
+    currentSignTarget = { url, assetType, assetId, reportId };
+    const titleEl = document.getElementById('docOptionsTitle');
+    if (titleEl) titleEl.innerHTML = `<i class="fas fa-file-alt"></i> ${docTitle}`;
+    const btnOpen = document.getElementById('btnOpenNormalDoc');
+    if (btnOpen) {
+        btnOpen.onclick = function() {
+            window.open(url, '_blank');
+            closeModal('modalDocumentOptions');
+        };
+    }
+    openModal('modalDocumentOptions');
+};
+
+window.openSignExistingModal = function() {
+    closeModal('modalDocumentOptions');
+    document.getElementById('signExistingPassword').value = "";
+    openModal('modalSignExisting');
+};
+
+window.applySignExisting = async function() {
+    const pwd = document.getElementById('signExistingPassword').value;
+    if (!pwd) { alert("Ingresa tu contraseña."); return; }
+    if (!currentSignTarget) return;
+    const btn = document.getElementById('btnApplySignExisting');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+    try {
+        if (!window.PDFLib) throw new Error("Librería PDF no cargada.");
+        const pdfRes = await fetch(currentSignTarget.url);
+        const arrayBuffer = await pdfRes.arrayBuffer();
+        const pdfDoc = await window.PDFLib.PDFDocument.load(arrayBuffer);
+        const pages = pdfDoc.getPages();
+        const lastPage = pages[pages.length - 1];
+
+        let certName = "Profesional Médico";
+        const session = getSessionDataSafe();
+        if (session && session.data) {
+            certName = session.data.nombre_doctor || session.data.nombre || session.data.usuario || certName;
+        }
+        if (typeof vaultP12Info !== 'undefined' && vaultP12Info && vaultP12Info.name) certName = vaultP12Info.name;
+
+        const signDate = new Date().toLocaleString("es-EC");
+        const qrText = "FIRMADO POR: " + certName + "\\nRAZON: Firma Electronica Medica\\nFECHA: " + signDate + "\\nVALIDACION: FirmaEC / PAdES";
+        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=" + encodeURIComponent(qrText);
+        
+        let qrImage = null;
+        try {
+            const qrFetch = await fetch(qrUrl);
+            const qrBlob = await qrFetch.blob();
+            qrImage = await pdfDoc.embedPng(await qrBlob.arrayBuffer());
+        } catch(e) { console.warn("No se pudo cargar QR", e); }
+
+        const qrSize = 50; const x = 30; const y = 30;
+        lastPage.drawRectangle({
+            x: x - 5, y: y - 5, width: 230, height: qrSize + 10,
+            color: window.PDFLib.rgb(1, 1, 1),
+            borderColor: window.PDFLib.rgb(0.8, 0.8, 0.8), borderWidth: 1
+        });
+        if (qrImage) lastPage.drawImage(qrImage, { x: x, y: y, width: qrSize, height: qrSize });
+
+        const helvetica = await pdfDoc.embedFont(window.PDFLib.StandardFonts.Helvetica);
+        const helveticaBold = await pdfDoc.embedFont(window.PDFLib.StandardFonts.HelveticaBold);
+        lastPage.drawText("FIRMADO ELECTRÓNICAMENTE POR:", { x: x + qrSize + 10, y: y + 35, size: 8, font: helveticaBold, color: window.PDFLib.rgb(0.2, 0.2, 0.2) });
+        lastPage.drawText(certName, { x: x + qrSize + 10, y: y + 20, size: 10, font: helveticaBold, color: window.PDFLib.rgb(0, 0, 0) });
+        lastPage.drawText("Validez verificable mediante aplicativo FirmaEC.", { x: x + qrSize + 10, y: y + 5, size: 7, font: helvetica, color: window.PDFLib.rgb(0.4, 0.4, 0.4) });
+
+        pdfDoc.setTitle('Documento Médico VIDAFEM');
+        pdfDoc.setCreator('VIDAFEM System');
+        pdfDoc.setProducer('VIDAFEM');
+        const pdfBytes = await pdfDoc.save();
+        
+        let binary = ''; const chunkSize = 32768;
+        for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, pdfBytes.subarray(i, i + chunkSize));
+        }
+        const pdfBase64 = "data:application/pdf;base64," + window.btoa(binary);
+
+        const apiFetcher = typeof postDiagnosisApiJson_ !== 'undefined' ? postDiagnosisApiJson_ : postClinicalApiJson_;
+        const res = await apiFetcher({
+            action: "sign_existing_diagnosis_asset",
+            id_reporte: currentSignTarget.reportId,
+            asset_type: currentSignTarget.assetType,
+            asset_id: currentSignTarget.assetId,
+            pdf_data_url: pdfBase64,
+            firma_password: pwd,
+            requester: getRequesterFromSession()
+        });
+
+        if (res.success) {
+            alert("¡Documento firmado criptográficamente con éxito!");
+            closeModal('modalSignExisting');
+            if (typeof setGeneratedDocsState_ !== 'undefined' && typeof currentGeneratedDocs !== 'undefined') {
+                const docs = normalizeGeneratedDocsState_(currentGeneratedDocs);
+                if (currentSignTarget.assetType === "report_pdf") docs.report_pdf = res.new_url;
+                else if (currentSignTarget.assetType === "recipe_pdf") docs.recipe_pdf = res.new_url;
+                else if (currentSignTarget.assetType === "certificate_pdf") docs.certificate_pdf = res.new_url;
+                else if (currentSignTarget.assetType === "external_pdf") {
+                    docs.external_pdf = res.new_url;
+                    const items = getCurrentExternalPdfItems_();
+                    if (items.length) items[0].url = res.new_url;
+                }
+                setGeneratedDocsState_(docs);
+            }
+            if (typeof loadDiagnosisHistory !== 'undefined') loadDiagnosisHistory();
+            window.open(res.new_url, '_blank');
+        } else {
+            alert("Error al firmar: " + (res.message || res.warning || "Contraseña incorrecta."));
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Ocurrió un error al procesar el documento. " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Aplicar Firma";
+    }
+};
