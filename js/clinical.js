@@ -1871,7 +1871,14 @@ window.applySignExisting = async function() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
     try {
-        if (!window.PDFLib) throw new Error("Librería PDF no cargada.");
+        if (!window.PDFLib) e((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
         const pdfRes = await fetch(currentSignTarget.url);
         const arrayBuffer = await pdfRes.arrayBuffer();
         const pdfDoc = await window.PDFLib.PDFDocument.load(arrayBuffer);
