@@ -1798,9 +1798,9 @@ function ensureSignModalsExist() {
     div.innerHTML = `
     <div class="modal-overlay" id="modalDocumentOptions">
         <div class="modal-box modal-box-fancy" style="max-width:400px;">
-            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #2980b9, #1f5f8b);">
-                <h3 id="docOptionsTitle"><i class="fas fa-file-alt"></i> Opciones</h3>
-                <span class="close-modal" onclick="closeModal('modalDocumentOptions')">&times;</span>
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #2980b9, #1f5f8b); display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                <h3 id="docOptionsTitle" style="margin:0; flex:1; font-size:1.2rem; line-height:1.2;"><i class="fas fa-file-alt"></i> Opciones</h3>
+                <span class="close-modal" onclick="closeModal('modalDocumentOptions')" style="font-size:28px; cursor:pointer;">&times;</span>
             </div>
             <div class="modal-body" style="text-align: center;">
                 <p style="margin-bottom: 20px; color:#555;">¿Qué deseas hacer con este documento?</p>
@@ -1817,9 +1817,9 @@ function ensureSignModalsExist() {
     </div>
     <div class="modal-overlay" id="modalSignExisting">
         <div class="modal-box modal-box-fancy" style="max-width:500px;">
-            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449);">
-                <h3><i class="fas fa-file-signature"></i> Firmar Documento</h3>
-                <span class="close-modal" onclick="closeModal('modalSignExisting')">&times;</span>
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449); display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                <h3 style="margin:0; flex:1; font-size:1.2rem; line-height:1.2;"><i class="fas fa-file-signature"></i> Firmar Documento</h3>
+                <span class="close-modal" onclick="closeModal('modalSignExisting')" style="font-size:28px; cursor:pointer;">&times;</span>
             </div>
             <div class="modal-body">
                 <form onsubmit="event.preventDefault(); applySignExisting();">
@@ -1843,9 +1843,9 @@ function ensureSignModalsExist() {
     </div>
     <div class="modal-overlay" id="modalSignPosition" style="z-index:9999;">
         <div class="modal-box" style="max-width: 95vw; max-height: 95vh; width: 850px; height: 90vh; display: flex; flex-direction: column; padding:0; overflow:hidden; background:#f4f6f8;">
-        <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; gap: 15px;">
-            <h3 style="color:white; margin:0; font-size:1.1rem; flex: 1; word-break: break-word; line-height: 1.3;"><i class="fas fa-hand-pointer"></i> Arrastra la firma a la posición deseada</h3>
-            <span class="close-modal" id="closeSignPosition" style="color:white; opacity:0.8; font-size:28px; cursor:pointer;">&times;</span>
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449); padding: 15px 20px; margin: 0; border-radius: 20px 20px 0 0; display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                <h3 style="color:white; margin:0; font-size:1.1rem; flex: 1; line-height: 1.3;"><i class="fas fa-hand-pointer"></i> Arrastra la firma a la posición deseada</h3>
+                <span class="close-modal" id="closeSignPosition" style="color:white; opacity:0.8; font-size:28px; cursor:pointer;">&times;</span>
             </div>
             <div class="modal-body" style="flex: 1; overflow: auto; background: #525659; display: flex; justify-content: center; padding: 20px; position: relative;">
                 <div id="pdfRenderContainer" style="position: relative; box-shadow: 0 0 10px rgba(0,0,0,0.5); display:inline-block; line-height:0; background:white;">
