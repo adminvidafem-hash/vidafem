@@ -4,6 +4,22 @@
 const APP_GIT_VERSION = "d102a91";
 console.log(`%c VIDAFEM %c Version: ${APP_GIT_VERSION} `, "background:#36235d; color:white; font-weight:bold; padding:4px 8px; border-radius:4px 0 0 4px;", "background:#27ae60; color:white; font-weight:bold; padding:4px 8px; border-radius:0 4px 4px 0;");
 
+// --- OBTENER VERSIÓN DINÁMICA DESDE GITHUB ---
+const GITHUB_REPO = "TU_USUARIO/TU_REPOSITORIO"; // Ej: "Joselyn/VIDAFEM"
+const GITHUB_BRANCH = "main"; // o "master", dependiendo de cómo se llame tu rama
+
+fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`)
+  .then(res => res.json())
+  .then(data => {
+    if (data && data.sha) {
+        const liveHash = data.sha.substring(0, 7);
+        console.log(`%c VIDAFEM %c Git Hash: ${liveHash} `, "background:#36235d; color:white; font-weight:bold; padding:4px 8px; border-radius:4px 0 0 4px;", "background:#27ae60; color:white; font-weight:bold; padding:4px 8px; border-radius:0 4px 4px 0;");
+    }
+  })
+  .catch(() => {
+      console.log(`%c VIDAFEM %c Version: Offline/Privado `, "background:#36235d; color:white; font-weight:bold; padding:4px 8px; border-radius:4px 0 0 4px;", "background:#e74c3c; color:white; font-weight:bold; padding:4px 8px; border-radius:0 4px 4px 0;");
+  });
+
 const PROD_API_URL = "https://script.google.com/macros/s/AKfycbxnfbCeCIQa8BWLfJwh6J20SNSksLEcHYdthf9mEfyev8tLF5wYg4uo7BsaMA5R4-NZUw/exec";
 const TEST_API_URL = "https://script.google.com/macros/s/AKfycbxnfbCeCIQa8BWLfJwh6J20SNSksLEcHYdthf9mEfyev8tLF5wYg4uo7BsaMA5R4-NZUw/exec";
 const VF_ENV_STORAGE_KEY = "vidafem_runtime_env";
