@@ -1437,7 +1437,6 @@ async function handleSaveDiagnosisAdvanced_(body, env, url) {
         recipe_key: normalizeText_(prepared.recipePdfKey),
         certificate_key: normalizeText_(prepared.certificatePdfKey)
       },
-      warning: cleanupWarning
       warning: finalWarning
     }
   };
@@ -4824,7 +4823,6 @@ async function prepareDiagnosisPersistenceWorker_(env, payload, options) {
     certificatePdfUrl,
     reportPdfKey,
     recipePdfKey,
-    certificatePdfKey
     certificatePdfKey,
     signatureWarnings: signatureWarnings.length ? signatureWarnings.join(" | ") : ""
   };
@@ -5669,7 +5667,6 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
     const parsedPdf = parseDataUrlWorker_(pdfDataUrl);
     if (!parsedPdf) return { success: false, message: "PDF invalido." };
     try {
-      const { default: signpdf } = await import("node-signpdf");
       const { Buffer } = await import("node:buffer");
       const signpdfModule = await import("node-signpdf");
       const signpdf = signpdfModule.default || signpdfModule;
@@ -5686,7 +5683,6 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
       const pdfBinary = atob(parsedPdf.base64);
       const pdfBytes = new Uint8Array(pdfBinary.length);
       for (let i = 0; i < pdfBinary.length; i++) pdfBytes[i] = pdfBinary.charCodeAt(i);
-      const signedBytes = signpdf.sign(Buffer.from(pdfBytes), Buffer.from(p12Buffer), { passphrase: password });
       let pdfBuffer = Buffer.from(pdfBytes);
       pdfBuffer = plainAddPlaceholder({
         pdfBuffer: pdfBuffer,
@@ -5697,8 +5693,6 @@ async function signPdfWithCloudflareWorker_(env, doctorId, password, pdfDataUrl)
       const signedBase64 = arrayBufferToBase64Worker_(signedBytes);
       return { success: true, dataUrl: "data:application/pdf;base64," + signedBase64 };
     } catch (e) {
-      console.warn("Worker: Libreria matematica PAdES no detectada. Retornando PDF con sello visual.");
-      return { success: true, dataUrl: pdfDataUrl };
       console.warn("Worker: PAdES Error:", e.message);
       return { success: true, dataUrl: pdfDataUrl, warning: "Error Criptografico: " + e.message };
     }
