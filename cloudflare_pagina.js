@@ -1,3 +1,11 @@
+/**
+ * ====================================================================================
+ * ⚠️ ATENCIÓN: NO PEGAR ESTE ARCHIVO DIRECTAMENTE EN EL EDITOR WEB DE CLOUDFLARE ⚠️
+ * ====================================================================================
+ * Este es el código "fuente". Si lo pegas en la web, arrojará el error:
+ * "No such module @signpdf/signpdf" porque la web no tiene la carpeta node_modules.
+ * Si necesitas pegarlo, debes empaquetarlo primero usando: npx wrangler deploy --dry-run --outdir=dist
+ */
 import { Buffer } from "node:buffer";
 import * as signpdfPkg from "@signpdf/signpdf";
 import * as placeholderPkg from "@signpdf/placeholder-plain";

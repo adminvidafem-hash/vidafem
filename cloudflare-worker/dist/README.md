@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "vidafem-api" generated at 2026-04-29T14:05:51.401Z.

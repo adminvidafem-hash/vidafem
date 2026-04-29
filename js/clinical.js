@@ -1841,8 +1841,45 @@ function ensureSignModalsExist() {
             </div>
         </div>
     </div>
+    <div class="modal-overlay" id="modalSignPosition" style="z-index:9999;">
+        <div class="modal-box" style="max-width: 95vw; max-height: 95vh; width: 850px; height: 90vh; display: flex; flex-direction: column; padding:0; overflow:hidden; background:#f4f6f8;">
+            <div class="modal-header modal-header-fancy" style="--mh-bg: linear-gradient(135deg, #27ae60, #1e8449); padding: 15px 20px;">
+                <h3 style="color:white; margin:0; font-size:1.1rem;"><i class="fas fa-hand-pointer"></i> Arrastra la firma a la posición deseada</h3>
+                <span class="close-modal" id="closeSignPosition" style="color:white; opacity:0.8;">&times;</span>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: auto; background: #525659; display: flex; justify-content: center; padding: 20px; position: relative;">
+                <div id="pdfRenderContainer" style="position: relative; box-shadow: 0 0 10px rgba(0,0,0,0.5); display:inline-block; line-height:0; background:white;">
+                    <canvas id="pdfRenderCanvas"></canvas>
+                    <div id="signatureDraggable" style="position: absolute; left: 30px; top: 30px; width: 170px; height: 45px; border: 2px dashed #27ae60; background: rgba(39, 174, 96, 0.15); cursor: grab; display: flex; align-items: center; padding: 4px; box-sizing: border-box; user-select: none; touch-action: none; border-radius:4px;">
+                        <img src="assets/logo2.png" style="height: 34px; width: 34px; object-fit: contain; pointer-events:none;" onerror="this.style.display='none'">
+                        <div style="font-size: 6px; line-height: 1.2; margin-left: 6px; color: #111; font-family: Arial, sans-serif; pointer-events:none;">
+                            <strong style="color:#27ae60;">FIRMADO ELECTRÓNICAMENTE POR:</strong><br>
+                            <strong style="font-size:8px;" id="dragCertName">Nombre</strong><br>
+                            Validez verificable mediante aplicativo FirmaEC
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 15px; text-align: center; background: #fff; border-top: 1px solid #ddd;">
+                <button type="button" class="btn-submit" style="background:#27ae60; width: 250px; padding:12px; font-size:16px;" id="btnConfirmSignaturePosition">
+                    <i class="fas fa-stamp"></i> ¡Estampar aquí!
+                </button>
+            </div>
+        </div>
+    </div>
     `;
     document.body.appendChild(div);
+    
+    // Lógica de arrastre
+    const el = document.getElementById('signatureDraggable');
+    const container = document.getElementById('pdfRenderContainer');
+    let isDragging = false, startX, startY, initialLeft, initialTop;
+    function onStart(e) { if(e.target.tagName === 'BUTTON') return; isDragging = true; const touch = e.touches ? e.touches[0] : e; startX = touch.clientX; startY = touch.clientY; initialLeft = parseInt(el.style.left || 0); initialTop = parseInt(el.style.top || 0); el.style.cursor = 'grabbing'; if (e.cancelable && e.type.includes('touch')) e.preventDefault(); }
+    function onMove(e) { if (!isDragging) return; const touch = e.touches ? e.touches[0] : e; const dx = touch.clientX - startX; const dy = touch.clientY - startY; let newL = initialLeft + dx; let newT = initialTop + dy; newL = Math.max(0, Math.min(newL, container.offsetWidth - el.offsetWidth)); newT = Math.max(0, Math.min(newT, container.offsetHeight - el.offsetHeight)); el.style.left = newL + 'px'; el.style.top = newT + 'px'; }
+    function onEnd() { if(isDragging) { isDragging = false; el.style.cursor = 'grab'; } }
+    el.addEventListener('mousedown', onStart); el.addEventListener('touchstart', onStart, {passive: false});
+    document.addEventListener('mousemove', onMove); document.addEventListener('touchmove', onMove, {passive: false});
+    document.addEventListener('mouseup', onEnd); document.addEventListener('touchend', onEnd);
 }
 document.addEventListener("DOMContentLoaded", ensureSignModalsExist);
 
@@ -1890,13 +1927,19 @@ window.applySignExisting = async function() {
     try {
         if (!window.PDFLib) {
             await new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
+                const script = document.createElement('script'); script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"; script.onload = resolve; script.onerror = reject; document.head.appendChild(script);
             });
         }
+        if (!window.pdfjsLib) {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script'); script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js";
+                script.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"; resolve(); };
+                script.onerror = reject; document.head.appendChild(script);
+            });
+        }
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparando vista previa...';
+
         const pdfRes = await fetch(currentSignTarget.url);
         const arrayBuffer = await pdfRes.arrayBuffer();
         const pdfDoc = await window.PDFLib.PDFDocument.load(arrayBuffer);
@@ -1905,19 +1948,56 @@ window.applySignExisting = async function() {
         let certName = "Profesional Médico";
         const session = getSessionDataSafe();
         if (session && session.data) certName = session.data.nombre_doctor || session.data.nombre || session.data.usuario || certName;
+        
+        closeModal('modalSignExisting');
+        
+        const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(pdf.numPages);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.getElementById('pdfRenderCanvas');
+        canvas.height = viewport.height; canvas.width = viewport.width;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+        
+        document.getElementById('dragCertName').innerText = certName;
+        const dragEl = document.getElementById('signatureDraggable');
+        dragEl.style.left = '30px'; dragEl.style.top = '30px';
+        
+        openModal('modalSignPosition');
+        
+        const position = await new Promise((resolve) => {
+            const btnConfirm = document.getElementById('btnConfirmSignaturePosition');
+            const btnClose = document.getElementById('closeSignPosition');
+            const handleConfirm = () => { const rE = dragEl.getBoundingClientRect(); const rC = canvas.getBoundingClientRect(); cleanup(); resolve({ x: rE.left - rC.left, y: rE.top - rC.top, w: rE.width, h: rE.height, cW: rC.width, cH: rC.height }); };
+            const handleCancel = () => { cleanup(); resolve(null); };
+            const cleanup = () => { btnConfirm.removeEventListener('click', handleConfirm); btnClose.removeEventListener('click', handleCancel); closeModal('modalSignPosition'); };
+            btnConfirm.addEventListener('click', handleConfirm); btnClose.addEventListener('click', handleCancel);
+        });
+
+        if (!position) { btn.disabled = false; btn.innerText = "Aplicar Firma"; return; }
+        if(window.showToast) window.showToast("Aplicando criptografía, por favor espere...", "info");
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sellando...';
+        
+        const pdfW = lastPage.getWidth(); const pdfH = lastPage.getHeight();
+        const scaleX = pdfW / position.cW; const scaleY = pdfH / position.cH;
+        const pdfX = position.x * scaleX; 
+        const pdfY = pdfH - ((position.y + position.h) * scaleY);
+        
         const signDate = new Date().toLocaleString("es-EC");
         const qrText = "FIRMADO POR: " + certName + "\\nRAZON: Firma Electronica Medica\\nFECHA: " + signDate + "\\nVALIDACION: FirmaEC / PAdES";
         const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=0&data=" + encodeURIComponent(qrText);
         let qrImage = null;
         try { const qrBlob = await (await fetch(qrUrl)).blob(); qrImage = await pdfDoc.embedPng(await qrBlob.arrayBuffer()); } catch(e) {}
-        const qrSize = 50; const x = 30; const y = 30;
-        lastPage.drawRectangle({ x: x - 5, y: y - 5, width: 230, height: qrSize + 10, color: window.PDFLib.rgb(1, 1, 1), borderColor: window.PDFLib.rgb(0.8, 0.8, 0.8), borderWidth: 1 });
-        if (qrImage) lastPage.drawImage(qrImage, { x: x, y: y, width: qrSize, height: qrSize });
+        
+        const qrSize = 40; 
+        if (qrImage) lastPage.drawImage(qrImage, { x: pdfX, y: pdfY, width: qrSize, height: qrSize });
         const helvetica = await pdfDoc.embedFont(window.PDFLib.StandardFonts.Helvetica);
         const helveticaBold = await pdfDoc.embedFont(window.PDFLib.StandardFonts.HelveticaBold);
-        lastPage.drawText("FIRMADO ELECTRÓNICAMENTE POR:", { x: x + qrSize + 10, y: y + 35, size: 8, font: helveticaBold, color: window.PDFLib.rgb(0.2, 0.2, 0.2) });
-        lastPage.drawText(certName, { x: x + qrSize + 10, y: y + 20, size: 10, font: helveticaBold, color: window.PDFLib.rgb(0, 0, 0) });
-        lastPage.drawText("Validez verificable mediante aplicativo FirmaEC.", { x: x + qrSize + 10, y: y + 5, size: 7, font: helvetica, color: window.PDFLib.rgb(0.4, 0.4, 0.4) });
+        const textX = pdfX + qrSize + 6;
+        lastPage.drawText("FIRMADO ELECTRÓNICAMENTE POR:", { x: textX, y: pdfY + 28, size: 6, font: helveticaBold, color: window.PDFLib.rgb(0.2, 0.2, 0.2) });
+        lastPage.drawText(certName, { x: textX, y: pdfY + 18, size: 8, font: helveticaBold, color: window.PDFLib.rgb(0, 0, 0) });
+        lastPage.drawText("Validez verificable mediante aplicativo FirmaEC.", { x: textX, y: pdfY + 8, size: 5, font: helvetica, color: window.PDFLib.rgb(0.4, 0.4, 0.4) });
+        
         pdfDoc.setTitle('Documento Médico VIDAFEM'); pdfDoc.setCreator('VIDAFEM System'); pdfDoc.setProducer('VIDAFEM');
         const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
         let binary = ''; const chunkSize = 32768;
@@ -1927,11 +2007,10 @@ window.applySignExisting = async function() {
         const res = await apiFetcher({ action: "sign_existing_diagnosis_asset", id_reporte: currentSignTarget.reportId, asset_type: currentSignTarget.assetType, asset_id: currentSignTarget.assetId, pdf_data_url: pdfBase64, firma_password: pwd, requester: getRequesterFromSession() });
         if (res.success) {
             alert("¡Documento firmado criptográficamente con éxito!");
-            closeModal('modalSignExisting');
             if (typeof loadDiagnosisHistory !== 'undefined') loadDiagnosisHistory();
             window.open(res.new_url, '_blank');
         } else alert("Error al firmar: " + (res.message || res.warning || "Contraseña incorrecta."));
-    } catch (err) { alert("Ocurrió un error al procesar el documento. " + err.message); } finally { btn.disabled = false; btn.innerText = "Aplicar Firma"; }
+    } catch (err) { alert("Ocurrió un error al procesar el documento. " + err.message); } finally { if(document.getElementById('modalSignPosition').classList.contains('active')) closeModal('modalSignPosition'); btn.disabled = false; btn.innerText = "Aplicar Firma"; }
 };
 // Función para borrar una cita desde la UI
 window.deleteAppointmentFromUI = async function(idCita) {
