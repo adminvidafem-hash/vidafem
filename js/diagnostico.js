@@ -1032,7 +1032,6 @@ function buildDiagnosisTemplateSignatureHtml_(payload) {
         + "<td style=\"padding:3mm 4mm; text-align:left; vertical-align:middle;\">"
         + "<div style=\"font-size:8pt; font-weight:bold; color:#2980b9; margin-bottom:1.5mm;\">FIRMADO ELECTRÓNICAMENTE POR:</div>"
         + "<div style=\"font-size:10pt; font-weight:bold; color:#111; margin-bottom:1mm;\">" + escapeHtmlDiagnosis_(certName) + "</div>"
-        + "<div style=\"font-size:8pt; color:#333;\">Fecha: " + escapeHtmlDiagnosis_(signDate) + "</div>"
         + "<div style=\"font-size:7pt; color:#666; margin-top:1mm;\">Validez verificable mediante aplicativo FirmaEC o PAdES.</div>"
         + "</td>"
         + "</tr>"
@@ -1269,13 +1268,8 @@ function drawSignaturesOnJsPdfFallback_(doc, y, data) {
         doc.text(rememberedSignatureData.certInfo.name, textStartX, y + 11);
         
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(51, 51, 51);
-        doc.text("Fecha: " + rememberedSignatureData.certInfo.date, textStartX, y + 15);
-        
-        doc.setFontSize(7);
         doc.setTextColor(102, 102, 102);
-        doc.text("Validez verificable mediante aplicativo FirmaEC.", textStartX, y + 18.5);
+        doc.text("Validez verificable mediante aplicativo FirmaEC.", textStartX, y + 15);
         
         y += 20; 
     }
@@ -4903,7 +4897,7 @@ window.applyElectronicSignature = function() {
     if (usingVault) {
         const signDate = new Date().toLocaleString("es-EC");
         const commonName = vaultP12Info.name;
-        const qrText = "FIRMADO POR: " + commonName + "\nFECHA: " + signDate + "\nVALIDACION: FirmaEC / PAdES";
+        const qrText = "FIRMADO POR: " + commonName + "\nVALIDACION: FirmaEC / PAdES";
         const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=" + encodeURIComponent(qrText);
         fetch(qrUrl).then(r => r.blob()).then(blob => {
             const reader = new FileReader();
@@ -4939,7 +4933,7 @@ window.applyElectronicSignature = function() {
             
             // 3. Generar QR Code de Validación
             const signDate = new Date().toLocaleString("es-EC");
-            const qrText = "FIRMADO POR: " + commonName + "\nFECHA: " + signDate + "\nVALIDACION: FirmaEC / PAdES";
+            const qrText = "FIRMADO POR: " + commonName + "\nVALIDACION: FirmaEC / PAdES";
             const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=" + encodeURIComponent(qrText);
             let qrBase64 = "";
             try {
