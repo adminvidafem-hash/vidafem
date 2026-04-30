@@ -1771,15 +1771,16 @@ function buildDiagnosisPdfFieldEntries_(payload) {
     : null;
 
   if (dynamicData) {
-    const used = {};
     const config = CONFIG_CAMPOS && Array.isArray(CONFIG_CAMPOS[service]) ? CONFIG_CAMPOS[service] : [];
     config.forEach((item) => {
       const type = String((item && item.tipo) || "").trim().toLowerCase();
       const key = String((item && item.nombre) || "").trim();
       if (!key || type === "titulo" || type === "imagenes") return;
-      used[key] = true;
 
       if (type === "antecedentes_go") {
+          const agoData = dynamicData[key];
+          if (!agoData || typeof agoData !== 'object') return;
+
           const parts = String(item && item.opciones || "").split("|||");
           const lines = [];
           parts.forEach(part => {
@@ -1787,7 +1788,7 @@ function buildDiagnosisPdfFieldEntries_(payload) {
               const k = p[0];
               const l = p[1] || k;
               if(!k) return;
-              const val = diagnosisPdfValueToText_(dynamicData['ago_' + k]);
+              const val = diagnosisPdfValueToText_(agoData[k]);
               if (val) lines.push("<b>" + escapeHtmlDiagnosis_(l) + ":</b> " + escapeHtmlDiagnosis_(val));
           });
           if (lines.length) {
@@ -1848,17 +1849,8 @@ function buildDiagnosisPdfFieldEntries_(payload) {
         type: type
       });
     });
-
-    Object.keys(dynamicData).forEach((key) => {
-      if (used[key]) return;
-      const value = diagnosisPdfValueToText_(dynamicData[key]);
-      if (!value) return;
-      entries.push({
-        key: key,
-        label: diagnosisPdfLabelFromKey_(key, service),
-        value: value
-      });
-    });
+    
+    // ¡ESTO ES CRÍTICO! Retornamos solo lo configurado y matamos cualquier dato fantasma viejo.
     return entries;
   }
 
@@ -5184,41 +5176,51 @@ async function saveDynamicService(servicio, generatePdf, btn, recetaData) {
     let generatedPdfPayload = null;
     
     try {
-        // 1. Recolectar datos del formulario dinámico
-        const inputs = document.querySelectorAll("#form-dinamico .doc-input");
+        // 1. Recolectar datos del formulario dinámico (Lógica corregida y basada en configuración)
+        const campos = CONFIG_CAMPOS[servicio] || [];
         const datosDinamicos = {};
-        inputs.forEach(inp => {
-            const key = inp.id.replace("dyn_", "");
-            datosDinamicos[key] = inp.value;
-        });
 
-        // 1.b Recolectar grupos de casillas (multi-seleccion)
-        const checkGroups = document.querySelectorAll("#form-dinamico .dyn-check-group");
-        checkGroups.forEach((group) => {
-          const key = String(group.getAttribute("data-field-key") || "").trim();
-          if (!key) return;
-          const selected = Array.from(group.querySelectorAll(".dyn-check-option:checked"))
-            .map((cb) => String(cb.value || "").trim())
-            .filter(Boolean);
-          datosDinamicos[key] = selected;
-        });
-
-        // 1.c Recolectar tablas de resultados
-        const tables = document.querySelectorAll("#form-dinamico .dyn-table-group");
-        tables.forEach((table) => {
-            const key = table.getAttribute("data-field-key");
+        campos.forEach(c => {
+            const key = c.nombre;
             if (!key) return;
-            const rows = table.querySelectorAll("tbody tr");
-            const tableData = [];
-            rows.forEach((tr) => {
-                const rowData = {};
-                const elements = tr.querySelectorAll("input, select");
-                elements.forEach(el => {
-                    rowData[el.getAttribute("data-col")] = el.value;
-                });
-                tableData.push(rowData);
-            });
-            datosDinamicos[key] = tableData;
+
+            if (c.tipo === 'antecedentes_go') {
+                const agoGroup = document.querySelector(`.dyn-ago-group[data-field-key="${key}"]`);
+                if (agoGroup) {
+                    const agoData = {};
+                    agoGroup.querySelectorAll('input[data-ago-key]').forEach(inp => {
+                        const agoKey = inp.dataset.agoKey;
+                        agoData[agoKey] = inp.value;
+                    });
+                    datosDinamicos[key] = agoData;
+                }
+            } else if (c.tipo === 'casillas_opciones') {
+                const group = document.querySelector(`.dyn-check-group[data-field-key="${key}"]`);
+                if (group) {
+                    const selected = Array.from(group.querySelectorAll(".dyn-check-option:checked"))
+                        .map(cb => cb.value);
+                    datosDinamicos[key] = selected;
+                }
+            } else if (c.tipo === 'tabla_resultados') {
+                const table = document.querySelector(`.dyn-table-group[data-field-key="${key}"]`);
+                if (table) {
+                    const rows = table.querySelectorAll("tbody tr");
+                    const tableData = [];
+                    rows.forEach(tr => {
+                        const rowData = {};
+                        tr.querySelectorAll("input, select").forEach(el => {
+                            rowData[el.dataset.col] = el.value;
+                        });
+                        tableData.push(rowData);
+                    });
+                    datosDinamicos[key] = tableData;
+                }
+            } else if (c.tipo !== 'titulo' && c.tipo !== 'imagenes') {
+                const input = document.getElementById(`dyn_${key}`);
+                if (input) {
+                    datosDinamicos[key] = input.value;
+                }
+            }
         });
 
         // 2. Imágenes (redimensionar según tamaño y slider de su galería)
