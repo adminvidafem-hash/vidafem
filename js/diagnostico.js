@@ -966,11 +966,12 @@ function buildDiagnosisTemplateImagesHtml_(images) {
   }).filter(Boolean).join("");
   if (!blocks) return "";
   return ""
-    + "<section style=\"margin-top:2mm;\">"
+    + "<section style=\"margin:2mm 0 8mm 0; display:block; clear:both;\">"
     + "<div style=\"font-size:10pt;font-weight:700;color:#36235d;margin:0 0 2mm 0;\">Evidencia Fotográfica</div>"
     + "<div style=\"display:flex;flex-wrap:wrap;gap:2.4mm;align-items:flex-start;\">"
     + blocks
     + "</div>"
+    + "<div style=\"clear:both; width:100%; height:2mm;\"></div>"
     + "</section>";
 }
 
