@@ -1,4 +1,4 @@
-﻿﻿// js/admin.js - VIDAFEM v3.1 (CRUD Completo + Modularidad)
+﻿﻿﻿﻿// js/admin.js - VIDAFEM v3.1 (CRUD Completo + Modularidad)
 
 let allPatients = [];
 let isDeletingPatient = false;
@@ -2677,7 +2677,17 @@ window.openServiceBuilder = function(existingService = null) {
             if(res.success && res.data) {
                 const config = res.data[existingService.nombre_servicio];
                 if(config && Array.isArray(config)) {
-                    config.forEach(c => addBuilderFieldRow(c.nombre, c.etiqueta, c.tipo, c.opciones));
+                config.forEach(c => {
+                    let ord = 9999;
+                    const m = String(c.opciones || "").match(/\|\|ORDEN:(\d+)/);
+                    if (m) ord = parseInt(m[1], 10);
+                    c._orden = ord;
+                });
+                config.sort((a, b) => a._orden - b._orden);
+                config.forEach(c => {
+                    const cleanOpts = String(c.opciones || "").replace(/\|\|ORDEN:\d+/g, "").trim();
+                    addBuilderFieldRow(c.nombre, c.etiqueta, c.tipo, cleanOpts);
+                });
                 }
             }
         });
@@ -2873,10 +2883,11 @@ window.saveServiceFullConfig = async function() {
     if(!name) return alert("El nombre del servicio es obligatorio.");
 
     const campos = [];
+    let idx = 0;
     document.querySelectorAll('#builderFieldsContainer .field-row').forEach(row => {
         const etiqueta = row.querySelector('.field-label').value;
         const tipo = row.querySelector('.field-type').value;
-        const opciones = row.querySelector('.field-options').value; // Leer opciones
+        let opciones = row.querySelector('.field-options').value; // Leer opciones
         
         if(etiqueta) {
             let nombreInterno = etiqueta.toLowerCase()
@@ -2885,12 +2896,16 @@ window.saveServiceFullConfig = async function() {
             
             if(tipo === 'titulo') nombreInterno = 'titulo_' + Math.random().toString(36).substr(2, 5);
 
+            opciones = opciones.replace(/\|\|ORDEN:\d+/g, "").trim();
+            opciones = opciones ? (opciones + "||ORDEN:" + idx) : ("||ORDEN:" + idx);
+
             campos.push({ 
                 nombre: nombreInterno, 
                 etiqueta: etiqueta, 
                 tipo: tipo,
-                opciones: opciones // Guardamos las opciones
+                opciones: opciones
             });
+            idx++;
         }
     });
 

@@ -4342,8 +4342,18 @@ function loadServicesDropdown() {
       
       // A. Guardar campos (Lo que ya tenías)
       if (resConfig.success) {
+          Object.keys(resConfig.data).forEach(srv => {
+              resConfig.data[srv].forEach(c => {
+                  let ord = 9999;
+                  const m = String(c.opciones || "").match(/\|\|ORDEN:(\d+)/);
+                  if (m) ord = parseInt(m[1], 10);
+                  c._orden = ord;
+                  c.opciones = String(c.opciones || "").replace(/\|\|ORDEN:\d+/g, "").trim();
+              });
+              resConfig.data[srv].sort((a, b) => a._orden - b._orden);
+          });
           CONFIG_CAMPOS = resConfig.data;
-          console.log("✅ Configuración cargada:", CONFIG_CAMPOS);
+          console.log("✅ Configuración cargada y ORDENADA:", CONFIG_CAMPOS);
       }
       
       // B. Guardar Metadatos (Aquí vienen los Títulos y Recomendaciones nuevos)

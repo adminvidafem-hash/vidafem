@@ -274,8 +274,16 @@
           if (res.success && res.data) {
             var config = res.data[existingService.nombre_servicio];
             if (Array.isArray(config)) {
+              config.forEach(function(c) {
+                  var ord = 9999;
+                  var m = String(c.opciones || "").match(/\|\|ORDEN:(\d+)/);
+                  if (m) ord = parseInt(m[1], 10);
+                  c._orden = ord;
+              });
+              config.sort(function(a, b) { return a._orden - b._orden; });
               config.forEach(function (c) {
-                addFieldRow(c.nombre, c.etiqueta, c.tipo, c.opciones);
+                var cleanOpts = String(c.opciones || "").replace(/\|\|ORDEN:\d+/g, "").trim();
+                addFieldRow(c.nombre, c.etiqueta, c.tipo, cleanOpts);
               });
               renderPreview();
             }
@@ -648,7 +656,7 @@
   function buildCampos() {
     var campos = [];
     var fields = collectFields();
-    fields.forEach(function (f) {
+    fields.forEach(function (f, idx) {
       var nombreInterno = String(f.name || "").trim();
       if (!nombreInterno) {
         nombreInterno = toKey(f.label);
@@ -656,11 +664,13 @@
       if (f.type === "titulo" && !nombreInterno) {
         nombreInterno = "titulo_" + Math.random().toString(36).slice(2, 7);
       }
+      var op = (f.options || []).join(", ").replace(/\|\|ORDEN:\d+/g, "").trim();
+      op = op ? (op + "||ORDEN:" + idx) : ("||ORDEN:" + idx);
       campos.push({
         nombre: nombreInterno,
         etiqueta: f.label,
         tipo: f.type,
-        opciones: (f.options || []).join(", "),
+        opciones: op,
       });
     });
     return campos;
