@@ -166,7 +166,7 @@ function updatePatientsToggleButton_() {
   if (!inactiveBtn) {
       inactiveBtn = document.createElement("button");
       inactiveBtn.id = "btnInactivePatients";
-      inactiveBtn.className = "btn-secondary";
+      inactiveBtn.className = "btn-primary-small";
       inactiveBtn.onclick = window.toggleInactivePatients;
       inactiveBtn.style.marginLeft = "10px";
       if (btn && btn.parentNode) btn.parentNode.insertBefore(inactiveBtn, btn.nextSibling);
