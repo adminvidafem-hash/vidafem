@@ -82,6 +82,46 @@ function postApiWithSession_(payload, urlOverride) {
 
 document.addEventListener("DOMContentLoaded", () => {
   if (!requireDoctorSession()) return;
+
+  // Inyectar CSS Morphing para los botones de acción rápida
+  const morphStyle = document.createElement("style");
+  morphStyle.textContent = `
+    .btn-morph {
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      overflow: hidden;
+      border-radius: 50px !important;
+      padding: 8px 14px !important;
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+      vertical-align: middle;
+    }
+    .btn-morph span {
+      max-width: 0;
+      opacity: 0;
+      display: inline-block;
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      overflow: hidden;
+    }
+    .btn-morph:hover {
+      padding: 8px 20px !important;
+    }
+    .btn-morph:hover span {
+      max-width: 250px;
+      opacity: 1;
+      margin-left: 8px;
+    }
+  `;
+  document.head.appendChild(morphStyle);
+
+  // Convertir el botón estático "Agregar Nuevo" en un botón expansible
+  const btnAddPatient = document.querySelector('button[onclick="openCreateModal()"]');
+  if (btnAddPatient) {
+      btnAddPatient.classList.add("btn-morph");
+      btnAddPatient.innerHTML = '<i class="fas fa-user-plus"></i><span>Agregar Nuevo</span>';
+  }
+
   loadDoctorProfileFromSession();
   setupDoctorProfileEditForm();
   setupDoctorVacationForm();
