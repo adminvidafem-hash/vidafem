@@ -157,28 +157,30 @@ function getCurrentPatientsBaseList_() {
 function updatePatientsToggleButton_() {
   const btn = document.getElementById("btnTogglePatientsView");
   if (!btn) return;
+  btn.classList.add("btn-morph");
   btn.innerHTML = patientListMode_ === "all"
-    ? '<i class="fas fa-clock-rotate-left"></i> Ver recientes'
-    : '<i class="fas fa-list"></i> Mostrar todos';
+    ? '<i class="fas fa-clock-rotate-left"></i><span>Ver recientes</span>'
+    : '<i class="fas fa-list"></i><span>Mostrar todos</span>';
   btn.style.opacity = patientListMode_ === "inactive" ? "0.5" : "1";
 
   let inactiveBtn = document.getElementById("btnInactivePatients");
   if (!inactiveBtn) {
       inactiveBtn = document.createElement("button");
       inactiveBtn.id = "btnInactivePatients";
-      inactiveBtn.className = "btn-primary-small";
+      inactiveBtn.className = "btn-primary-small btn-morph";
       inactiveBtn.onclick = window.toggleInactivePatients;
       inactiveBtn.style.marginLeft = "10px";
       if (btn && btn.parentNode) btn.parentNode.insertBefore(inactiveBtn, btn.nextSibling);
   }
   if (inactiveBtn) {
+      inactiveBtn.classList.add("btn-morph");
       if (patientListMode_ === "inactive") {
-          inactiveBtn.innerHTML = '<i class="fas fa-times"></i> Salir de inactivos';
+          inactiveBtn.innerHTML = '<i class="fas fa-times"></i><span>Salir de inactivos</span>';
           inactiveBtn.style.background = "#e74c3c";
           inactiveBtn.style.color = "white";
           inactiveBtn.style.border = "none";
       } else {
-          inactiveBtn.innerHTML = '<i class="fas fa-user-clock"></i> Sin movimiento (+3 meses)';
+          inactiveBtn.innerHTML = '<i class="fas fa-user-clock"></i><span>Sin movimiento (+3 meses)</span>';
           inactiveBtn.style.background = "#fff";
           inactiveBtn.style.color = "#e74c3c";
           inactiveBtn.style.border = "1px solid #e74c3c";
